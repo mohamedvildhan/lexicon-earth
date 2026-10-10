@@ -2,7 +2,10 @@
 
 Local-first etymological globe: search a word, build a lineage graph from free structured sources, and view schematic geographic associations on a 3D Earth.
 
-## Run
+**Live:** [https://mohamedvildhan.github.io/lexicon-earth/](https://mohamedvildhan.github.io/lexicon-earth/)  
+**Repo:** [https://github.com/mohamedvildhan/lexicon-earth](https://github.com/mohamedvildhan/lexicon-earth)
+
+## Run locally
 
 ```bash
 cd "Lexicon Earth"
