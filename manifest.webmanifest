@@ -1,0 +1,17 @@
+{
+  "name": "Lexicon Earth",
+  "short_name": "Lexicon Earth",
+  "description": "A local-first etymological globe for tracing words across languages and places.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f2e9",
+  "theme_color": "#f5f2e9",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

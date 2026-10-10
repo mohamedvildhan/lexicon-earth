@@ -1,0 +1,349 @@
+import { adapters, getAdapter } from "./sources/index.js";
+import { makeRecord } from "./model.js";
+import { cacheKey, getEntry, putEntry, findCachedByQuery } from "./db.js";
+
+const DISCOVERY_TTL_MS = 5 * 60 * 1000;
+const discoveryCache = new Map();
+
+/* Wiktionary: ~12s with one retry (real abort). Others stay short. */
+const ADAPTER_TIMEOUTS = {
+  wiktionary: 12000,
+  wikidata: 6000,
+  kaikki: 2000,
+};
+const FETCH_TIMEOUTS = {
+  wiktionary: 12000,
+  wikidata: 12000,
+  kaikki: 4000,
+};
+
+let searchSeq = 0;
+let activeAbort = null;
+
+/** Default: Wiktionary-only for speed. Toggle via setMultiSource(true). */
+let multiSource = false;
+
+export function setMultiSource(on) {
+  multiSource = !!on;
+}
+
+export function getMultiSource() {
+  return multiSource;
+}
+
+export function normalizeQuery(raw) {
+  const original = String(raw ?? "");
+  const trimmed = original.trim();
+  const normalized = trimmed.normalize("NFC");
+  return {
+    original,
+    query: normalized,
+    keyForm: normalized.toLowerCase(),
+  };
+}
+
+function discoveryKey(keyForm) {
+  return `${keyForm}|${multiSource ? "multi" : "wikt"}`;
+}
+
+function beginSearchAbort() {
+  if (activeAbort) activeAbort.abort();
+  activeAbort = new AbortController();
+  return activeAbort;
+}
+
+/**
+ * Race a promise against a timeout; aborts `controller` on timeout so the
+ * underlying fetch is cancelled (not just ignored).
+ */
+function withTimeout(promise, ms, label = "lookup", controller = null) {
+  if (!ms || ms <= 0) return promise;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      try {
+        controller?.abort();
+      } catch {
+        /* ignore */
+      }
+      reject(new Error(`${label} timed out`));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function withRetry(fn, { retries = 1, label = "lookup" } = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (e?.name === "AbortError") throw e;
+      if (i < retries) await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+    }
+  }
+  throw lastErr || new Error(`${label} failed`);
+}
+
+function mergeCandidates(into, found, seen) {
+  for (const c of found || []) {
+    const sig = `${c.sourceId}|${c.lemma}|${c.sense}|${c.languageCode}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    into.push(c);
+  }
+}
+
+/** Wiktionary-only discovery (fast path). */
+export async function discoverWiktionary(rawQuery, { onProgress, signal } = {}) {
+  const { original, query, keyForm } = normalizeQuery(rawQuery);
+  if (!query) return { original, query, keyForm, candidates: [], errors: [] };
+
+  const dk = discoveryKey(keyForm);
+  const mem = discoveryCache.get(dk);
+  if (mem && Date.now() - mem.at < DISCOVERY_TTL_MS) {
+    return { ...mem.payload, fromDiscoveryCache: true };
+  }
+
+  const wikt = getAdapter("wiktionary");
+  onProgress?.("Searching Wiktionary…");
+  const errors = [];
+  const candidates = [];
+  const seen = new Set();
+  try {
+    const found = await withRetry(
+      () => {
+        const ctrl = new AbortController();
+        const onAbort = () => ctrl.abort();
+        signal?.addEventListener("abort", onAbort, { once: true });
+        if (signal?.aborted) ctrl.abort();
+        return withTimeout(
+          wikt.searchCandidates(query, { languageTag: "en", signal: ctrl.signal }),
+          ADAPTER_TIMEOUTS.wiktionary,
+          "wiktionary",
+          ctrl
+        ).finally(() => signal?.removeEventListener("abort", onAbort));
+      },
+      { retries: 1, label: "wiktionary" }
+    );
+    mergeCandidates(candidates, found, seen);
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+    errors.push({ sourceId: "wiktionary", message: e.message || String(e) });
+  }
+
+  const payload = { original, query, keyForm, candidates: [...candidates], errors };
+  if (payload.candidates.length) discoveryCache.set(dk, { at: Date.now(), payload });
+  return payload;
+}
+
+/** Multi-source discovery (slower; optional). */
+export async function discoverMulti(rawQuery, { onProgress, signal } = {}) {
+  const { original, query, keyForm } = normalizeQuery(rawQuery);
+  if (!query) return { original, query, keyForm, candidates: [], errors: [] };
+
+  const dk = discoveryKey(keyForm);
+  const mem = discoveryCache.get(dk);
+  if (mem && Date.now() - mem.at < DISCOVERY_TTL_MS) {
+    return { ...mem.payload, fromDiscoveryCache: true };
+  }
+
+  onProgress?.("Searching all sources…");
+  const errors = [];
+  const candidates = [];
+  const seen = new Set();
+
+  const settled = await Promise.all(
+    adapters.map((adapter) => {
+      const ctrl = new AbortController();
+      const onAbort = () => ctrl.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) ctrl.abort();
+      return withTimeout(
+        adapter.searchCandidates(query, { languageTag: "en", signal: ctrl.signal }),
+        ADAPTER_TIMEOUTS[adapter.id] ?? 4000,
+        adapter.id,
+        ctrl
+      )
+        .then((found) => ({ adapter, found, ok: true }))
+        .catch((e) => ({ adapter, found: [], ok: false, error: e }))
+        .finally(() => signal?.removeEventListener("abort", onAbort));
+    })
+  );
+
+  for (const r of settled) {
+    if (!r.ok) {
+      if (r.error?.name !== "AbortError") {
+        errors.push({ sourceId: r.adapter.id, message: r.error?.message || String(r.error) });
+      }
+    } else mergeCandidates(candidates, r.found, seen);
+  }
+
+  if (signal?.aborted) {
+    const err = new Error("Aborted");
+    err.name = "AbortError";
+    throw err;
+  }
+
+  const payload = { original, query, keyForm, candidates: [...candidates], errors };
+  if (payload.candidates.length) discoveryCache.set(dk, { at: Date.now(), payload });
+  return payload;
+}
+
+export async function loadCached(rawQuery, languageCode = "en", senseId = "0") {
+  const { keyForm } = normalizeQuery(rawQuery);
+  const key = cacheKey(keyForm, languageCode, senseId);
+  const hit = await getEntry(key);
+  if (!hit) return null;
+  return { ...hit, fromCache: true, cacheKey: key };
+}
+
+export async function fetchAndCache(candidate, { original, query, onProgress, seq, signal } = {}) {
+  const adapter = getAdapter(candidate.sourceId);
+  if (!adapter) throw new Error("Unknown source adapter.");
+
+  onProgress?.(`Loading ${adapter.name}…`);
+  let lineage;
+  try {
+    const limit = FETCH_TIMEOUTS[adapter.id] ?? 8000;
+    const run = () => {
+      const ctrl = new AbortController();
+      const onAbort = () => ctrl.abort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) ctrl.abort();
+      return withTimeout(
+        adapter.fetchLineage(candidate, { signal: ctrl.signal }),
+        limit,
+        adapter.id,
+        ctrl
+      ).finally(() => signal?.removeEventListener("abort", onAbort));
+    };
+    lineage =
+      adapter.id === "wiktionary" ? await withRetry(run, { retries: 1, label: "wiktionary" }) : await run();
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+    throw new Error(`${adapter.name} unavailable: ${e.message || e}`);
+  }
+  if (seq != null && seq !== searchSeq) return { cancelled: true };
+
+  if (!lineage || !lineage.nodes?.length) {
+    throw new Error(`${adapter.name} returned no etymology record for “${candidate.lemma}”.`);
+  }
+
+  const record = makeRecord({
+    query: (query || candidate.lemma).toLowerCase(),
+    queryOriginal: original || candidate.lemma,
+    word: lineage.word || candidate.lemma,
+    language: lineage.language || candidate.language,
+    languageCode: lineage.languageCode || candidate.languageCode || "en",
+    sense: lineage.sense || candidate.sense || "",
+    definition: lineage.definition || "",
+    nodes: lineage.nodes,
+    edges: lineage.edges || [],
+    citations: lineage.citations || [],
+    sourcesUsed: [adapter.id],
+    gaps: lineage.gaps || [],
+    alternatives: lineage.alternatives || [],
+    primarySource: adapter.id,
+  });
+
+  const key = cacheKey(record.query, record.languageCode, candidate.id || record.sense || "0");
+  record.cacheKey = key;
+  await putEntry(key, record);
+  discoveryCache.delete(discoveryKey(record.query));
+  discoveryCache.delete(`${record.query}|wikt`);
+  discoveryCache.delete(`${record.query}|multi`);
+  return { ...record, fromCache: false, cacheKey: key };
+}
+
+export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
+  const seq = ++searchSeq;
+  const abort = beginSearchAbort();
+  const { signal } = abort;
+  const { original, query, keyForm } = normalizeQuery(rawQuery);
+  if (!query) return { status: "empty" };
+
+  if (!force) {
+    onProgress?.("Checking cache…");
+    const cached = (await loadCached(keyForm)) || (await findCachedByQuery(keyForm));
+    if (seq !== searchSeq) return { status: "cancelled" };
+    if (cached) return { status: "ready", record: { ...cached, fromCache: true } };
+  }
+
+  if (!navigator.onLine) {
+    return {
+      status: "error",
+      message: "You’re offline and this word is not in the local cache.",
+      retryable: false,
+    };
+  }
+
+  let discovery;
+  try {
+    discovery = multiSource
+      ? await discoverMulti(query, { onProgress, signal })
+      : await discoverWiktionary(query, { onProgress, signal });
+  } catch (e) {
+    if (e?.name === "AbortError" || seq !== searchSeq) return { status: "cancelled" };
+    const cached = await loadCached(keyForm);
+    if (cached) return { status: "ready", record: cached, warning: e.message };
+    return { status: "error", message: e.message || "Lookup failed.", retryable: true };
+  }
+  if (seq !== searchSeq || signal.aborted) return { status: "cancelled" };
+
+  const real = discovery.candidates.filter((c) => !c.meta?.suggestion);
+  const suggestions = discovery.candidates.filter((c) => c.meta?.suggestion);
+
+  if (!real.length) {
+    if (suggestions.length) {
+      return {
+        status: "suggestions",
+        original,
+        query,
+        suggestions,
+        errors: discovery.errors,
+      };
+    }
+    const cached = await loadCached(keyForm);
+    if (cached) return { status: "ready", record: cached, warning: "Live sources returned no entry; showing cache." };
+    return {
+      status: "miss",
+      original,
+      query,
+      message: `No lexical entry found for “${query}”.`,
+      errors: discovery.errors,
+    };
+  }
+
+  if (real.length > 1) {
+    const ordered = [
+      ...real.filter((c) => c.sourceId === "wiktionary"),
+      ...real.filter((c) => c.sourceId !== "wiktionary"),
+    ];
+    return {
+      status: "candidates",
+      original,
+      query,
+      candidates: ordered,
+      errors: discovery.errors,
+    };
+  }
+
+  try {
+    const record = await fetchAndCache(real[0], { original, query, onProgress, seq, signal });
+    if (record?.cancelled || seq !== searchSeq) return { status: "cancelled" };
+    return { status: "ready", record, errors: discovery.errors };
+  } catch (e) {
+    if (e?.name === "AbortError" || seq !== searchSeq) return { status: "cancelled" };
+    const cached = await loadCached(keyForm);
+    if (cached) return { status: "ready", record: cached, warning: e.message };
+    return { status: "error", message: e.message, retryable: true, errors: discovery.errors };
+  }
+}
+
+export async function selectCandidate(candidate, ctx = {}) {
+  const seq = ++searchSeq;
+  const abort = beginSearchAbort();
+  return fetchAndCache(candidate, { ...ctx, seq, signal: abort.signal });
+}

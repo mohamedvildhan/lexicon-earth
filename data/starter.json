@@ -1,0 +1,618 @@
+{
+  "format": "lexicon-earth-cache",
+  "version": 2,
+  "note": "Bundled starter lineages verified against cited sources. Geographic positions are language-heartland inferences unless noted.",
+  "entries": [
+    {
+      "id": "starter_coffee",
+      "schemaVersion": 2,
+      "query": "coffee",
+      "queryOriginal": "Coffee",
+      "word": "coffee",
+      "language": "English",
+      "languageCode": "en",
+      "sense": "Etymology",
+      "definition": "noun — a beverage made by infusing ground coffee beans in hot water",
+      "sourcesUsed": [
+        "wiktionary",
+        "starter"
+      ],
+      "primarySource": "wiktionary",
+      "gaps": [
+        "Geographic positions mark language heartlands (inferred), not a documented travel itinerary for the word."
+      ],
+      "alternatives": [],
+      "citations": [
+        {
+          "id": "cit_coffee_wikt",
+          "title": "Wiktionary: coffee",
+          "url": "https://en.wiktionary.org/wiki/coffee",
+          "dataset": "English Wiktionary",
+          "entry": "coffee",
+          "retrievedAt": "2026-10-10T00:00:00.000Z",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Wiktionary contributors",
+          "transform": "Starter dataset curated from Wiktionary etymology templates (bor/der chain)."
+        }
+      ],
+      "nodes": [
+        {
+          "id": "cf_ar",
+          "form": "قَهْوَة",
+          "language": "Arabic",
+          "languageCode": "ar",
+          "gloss": "wine; coffee",
+          "transliteration": "qahwa",
+          "yearStart": 600,
+          "yearEnd": null,
+          "lat": 27,
+          "lon": 38,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ]
+        },
+        {
+          "id": "cf_ota",
+          "form": "قهوه",
+          "language": "Ottoman Turkish",
+          "languageCode": "ota",
+          "gloss": "",
+          "transliteration": "kahve",
+          "yearStart": 1299,
+          "yearEnd": 1922,
+          "lat": 41,
+          "lon": 28.97,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ]
+        },
+        {
+          "id": "cf_it",
+          "form": "caffè",
+          "language": "Italian",
+          "languageCode": "it",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1200,
+          "yearEnd": null,
+          "lat": 43.8,
+          "lon": 11.3,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ]
+        },
+        {
+          "id": "cf_nl",
+          "form": "koffie",
+          "language": "Dutch",
+          "languageCode": "nl",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1500,
+          "yearEnd": null,
+          "lat": 52.4,
+          "lon": 4.9,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ]
+        },
+        {
+          "id": "cf_en",
+          "form": "coffee",
+          "language": "English",
+          "languageCode": "en",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1500,
+          "yearEnd": null,
+          "lat": 51.5,
+          "lon": -0.12,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "cfe1",
+          "fromId": "cf_ar",
+          "toId": "cf_ota",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "dateApprox": null,
+          "note": "Borrowing pathway recorded on Wiktionary.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "cfe2",
+          "fromId": "cf_ota",
+          "toId": "cf_it",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "note": "Borrowing pathway recorded on Wiktionary.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "cfe3",
+          "fromId": "cf_it",
+          "toId": "cf_nl",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "note": "Borrowing pathway recorded on Wiktionary.",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "cfe4",
+          "fromId": "cf_nl",
+          "toId": "cf_en",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "note": "English borrowed from Dutch (Wiktionary).",
+          "citationIds": [
+            "cit_coffee_wikt"
+          ],
+          "schematic": true
+        }
+      ],
+      "cachedAt": 0
+    },
+    {
+      "id": "starter_paradise",
+      "schemaVersion": 2,
+      "query": "paradise",
+      "queryOriginal": "Paradise",
+      "word": "paradise",
+      "language": "English",
+      "languageCode": "en",
+      "sense": "Etymology",
+      "definition": "noun — heaven; an ideal place",
+      "sourcesUsed": [
+        "wiktionary",
+        "starter"
+      ],
+      "primarySource": "wiktionary",
+      "gaps": [
+        "Includes a reconstructed Proto-Iranian stage (asterisk) as marked in sources.",
+        "Geographic associations are language-heartland inferences."
+      ],
+      "alternatives": [],
+      "citations": [
+        {
+          "id": "cit_paradise_wikt",
+          "title": "Wiktionary: paradise",
+          "url": "https://en.wiktionary.org/wiki/paradise",
+          "dataset": "English Wiktionary",
+          "entry": "paradise",
+          "retrievedAt": "2026-10-10T00:00:00.000Z",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Wiktionary contributors",
+          "transform": "Starter curated from Wiktionary inheritance/borrowing chain including reconstructed form."
+        }
+      ],
+      "nodes": [
+        {
+          "id": "pd_ira",
+          "form": "*parādaiĵah",
+          "language": "Proto-Iranian",
+          "languageCode": "ira-pro",
+          "gloss": "walled enclosure",
+          "transliteration": "",
+          "yearStart": -2000,
+          "yearEnd": -1000,
+          "lat": 39,
+          "lon": 65,
+          "geoBasis": "language_heartland",
+          "epistemic": "reconstructed",
+          "note": "Reconstructed form. Homeland approximate.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ]
+        },
+        {
+          "id": "pd_ae",
+          "form": "pairidaēza",
+          "language": "Avestan",
+          "languageCode": "ae",
+          "gloss": "walled enclosure, park",
+          "transliteration": "pairidaēza",
+          "yearStart": -1500,
+          "yearEnd": -400,
+          "lat": 36,
+          "lon": 62,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ]
+        },
+        {
+          "id": "pd_grc",
+          "form": "παράδεισος",
+          "language": "Ancient Greek",
+          "languageCode": "grc",
+          "gloss": "park, paradise",
+          "transliteration": "paradeisos",
+          "yearStart": -800,
+          "yearEnd": 300,
+          "lat": 37.98,
+          "lon": 23.72,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ]
+        },
+        {
+          "id": "pd_la",
+          "form": "paradīsus",
+          "language": "Latin",
+          "languageCode": "la",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": -700,
+          "yearEnd": 600,
+          "lat": 41.9,
+          "lon": 12.5,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ]
+        },
+        {
+          "id": "pd_en",
+          "form": "paradise",
+          "language": "English",
+          "languageCode": "en",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1500,
+          "yearEnd": null,
+          "lat": 51.5,
+          "lon": -0.12,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "pde1",
+          "fromId": "pd_ira",
+          "toId": "pd_ae",
+          "type": "inheritance",
+          "epistemic": "reconstructed",
+          "note": "Link involves reconstructed proto-form.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "pde2",
+          "fromId": "pd_ae",
+          "toId": "pd_grc",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "pde3",
+          "fromId": "pd_grc",
+          "toId": "pd_la",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "pde4",
+          "fromId": "pd_la",
+          "toId": "pd_en",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "note": "Via French/Latin path summarized on Wiktionary.",
+          "citationIds": [
+            "cit_paradise_wikt"
+          ],
+          "schematic": true
+        }
+      ],
+      "cachedAt": 0
+    },
+    {
+      "id": "starter_algebra",
+      "schemaVersion": 2,
+      "query": "algebra",
+      "queryOriginal": "Algebra",
+      "word": "algebra",
+      "language": "English",
+      "languageCode": "en",
+      "sense": "Etymology",
+      "definition": "noun — the branch of mathematics dealing with symbols and rules for manipulating them",
+      "sourcesUsed": [
+        "wiktionary",
+        "starter"
+      ],
+      "primarySource": "wiktionary",
+      "gaps": [
+        "Borrowed scholarly term; schematic language-heartland path only."
+      ],
+      "alternatives": [],
+      "citations": [
+        {
+          "id": "cit_algebra_wikt",
+          "title": "Wiktionary: algebra",
+          "url": "https://en.wiktionary.org/wiki/algebra",
+          "dataset": "English Wiktionary",
+          "entry": "algebra",
+          "retrievedAt": "2026-10-10T00:00:00.000Z",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Wiktionary contributors",
+          "transform": "Starter curated from Wiktionary (Arabic الجبر via Medieval Latin)."
+        }
+      ],
+      "nodes": [
+        {
+          "id": "al_ar",
+          "form": "الجبر",
+          "language": "Arabic",
+          "languageCode": "ar",
+          "gloss": "reunion of broken parts; restoration",
+          "transliteration": "al-jabr",
+          "yearStart": 600,
+          "yearEnd": null,
+          "lat": 27,
+          "lon": 38,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_algebra_wikt"
+          ]
+        },
+        {
+          "id": "al_la",
+          "form": "algebra",
+          "language": "Medieval Latin",
+          "languageCode": "la-med",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 700,
+          "yearEnd": 1500,
+          "lat": 47,
+          "lon": 8,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_algebra_wikt"
+          ]
+        },
+        {
+          "id": "al_en",
+          "form": "algebra",
+          "language": "English",
+          "languageCode": "en",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1500,
+          "yearEnd": null,
+          "lat": 51.5,
+          "lon": -0.12,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_algebra_wikt"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "ale1",
+          "fromId": "al_ar",
+          "toId": "al_la",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_algebra_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "ale2",
+          "fromId": "al_la",
+          "toId": "al_en",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_algebra_wikt"
+          ],
+          "schematic": true
+        }
+      ],
+      "cachedAt": 0
+    },
+    {
+      "id": "starter_sugar",
+      "schemaVersion": 2,
+      "query": "sugar",
+      "queryOriginal": "Sugar",
+      "word": "sugar",
+      "language": "English",
+      "languageCode": "en",
+      "sense": "Etymology",
+      "definition": "noun — a sweet crystalline substance from plants",
+      "sourcesUsed": [
+        "wiktionary",
+        "starter"
+      ],
+      "primarySource": "wiktionary",
+      "gaps": [
+        "Long borrowing chain; intermediate European stages simplified in this starter summary.",
+        "Geographic journey is incomplete relative to full trade history — honest schematic only."
+      ],
+      "alternatives": [],
+      "citations": [
+        {
+          "id": "cit_sugar_wikt",
+          "title": "Wiktionary: sugar",
+          "url": "https://en.wiktionary.org/wiki/sugar",
+          "dataset": "English Wiktionary",
+          "entry": "sugar",
+          "retrievedAt": "2026-10-10T00:00:00.000Z",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Wiktionary contributors",
+          "transform": "Starter curated; Sanskrit→Persian→Arabic→European path summarized from Wiktionary."
+        }
+      ],
+      "nodes": [
+        {
+          "id": "sg_sa",
+          "form": "शर्करा",
+          "language": "Sanskrit",
+          "languageCode": "sa",
+          "gloss": "gravel; sugar",
+          "transliteration": "śarkarā",
+          "yearStart": -1500,
+          "yearEnd": 500,
+          "lat": 27,
+          "lon": 80,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ]
+        },
+        {
+          "id": "sg_fa",
+          "form": "شکر",
+          "language": "Persian",
+          "languageCode": "fa",
+          "gloss": "",
+          "transliteration": "shakar",
+          "yearStart": 900,
+          "yearEnd": null,
+          "lat": 35.7,
+          "lon": 51.4,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ]
+        },
+        {
+          "id": "sg_ar",
+          "form": "سُكَّر",
+          "language": "Arabic",
+          "languageCode": "ar",
+          "gloss": "",
+          "transliteration": "sukkar",
+          "yearStart": 600,
+          "yearEnd": null,
+          "lat": 27,
+          "lon": 38,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Inferred geographic association from language range.",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ]
+        },
+        {
+          "id": "sg_en",
+          "form": "sugar",
+          "language": "English",
+          "languageCode": "en",
+          "gloss": "",
+          "transliteration": "",
+          "yearStart": 1500,
+          "yearEnd": null,
+          "lat": 51.5,
+          "lon": -0.12,
+          "geoBasis": "language_heartland",
+          "epistemic": "attested",
+          "note": "Medieval European intermediates omitted in starter; see Wiktionary for full chain.",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "sge1",
+          "fromId": "sg_sa",
+          "toId": "sg_fa",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "sge2",
+          "fromId": "sg_fa",
+          "toId": "sg_ar",
+          "type": "borrowing",
+          "epistemic": "attested",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ],
+          "schematic": true
+        },
+        {
+          "id": "sge3",
+          "fromId": "sg_ar",
+          "toId": "sg_en",
+          "type": "borrowing",
+          "epistemic": "uncertain",
+          "note": "Direct arc skips documented European stages — schematic incomplete journey.",
+          "citationIds": [
+            "cit_sugar_wikt"
+          ],
+          "schematic": true
+        }
+      ],
+      "cachedAt": 0
+    }
+  ]
+}

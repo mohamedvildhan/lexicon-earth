@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f5f2e9">
+<meta name="description" content="About Lexicon Earth — a local-first etymological globe for tracing words across languages and places.">
+<title>About — Lexicon Earth</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/site.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="site-brand" href="./index.html">Lexicon Earth <small>/ Atlas 02</small></a>
+  <nav class="site-nav" aria-label="Site">
+    <a href="./index.html">Atlas</a>
+    <a href="./about.html" aria-current="page">About</a>
+    <a href="./how-it-works.html">How it works</a>
+    <a href="./privacy.html">Privacy</a>
+  </nav>
+</header>
+
+<main class="site-main">
+  <h1>About Lexicon Earth</h1>
+  <p class="lede">A local-first atlas of word histories — search a word, see a schematic journey across languages and places on a globe.</p>
+
+  <h2>What this is</h2>
+  <p>Lexicon Earth helps you explore how English words connect to earlier forms in other languages. It plots those forms on a map using language heartlands (approximate geographic associations), not attested travel itineraries.</p>
+  <p>Lookups use free public dictionary APIs. Results you open are stored in your browser (IndexedDB) so starter words and recent searches can work offline.</p>
+
+  <h2>What it is not</h2>
+  <ul>
+    <li>Not a professional etymological dictionary or a substitute for scholarly sources.</li>
+    <li>Not a literal map of how a word “traveled” from place to place.</li>
+    <li>Not a guarantee that every parsed template or reconstructed form is correct.</li>
+  </ul>
+
+  <div class="callout">
+    <p><strong>Read the globe as a sketch.</strong> Routes are schematic. Markers sit on language heartlands so related forms are easy to compare — they are not GPS pins for historical speech events.</p>
+  </div>
+
+  <h2>Data sources</h2>
+  <ul>
+    <li><a href="https://en.wiktionary.org/" rel="noopener" target="_blank">English Wiktionary</a> — primary etymology extraction (CC BY-SA 4.0)</li>
+    <li><a href="https://www.wikidata.org/" rel="noopener" target="_blank">Wikidata Lexemes</a> — optional structured links (CC0)</li>
+    <li><a href="https://kaikki.org/" rel="noopener" target="_blank">Kaikki / Wiktextract</a> — optional assist (CC BY-SA 4.0)</li>
+    <li><a href="https://www.naturalearthdata.com/" rel="noopener" target="_blank">Natural Earth</a> — land &amp; coastline (public domain)</li>
+    <li><a href="https://threejs.org/" rel="noopener" target="_blank">three.js</a> — 3D rendering (MIT)</li>
+  </ul>
+  <p>Each lookup lists its citations in the Sources panel, including a link back to the Wiktionary entry when available.</p>
+
+  <h2>Local-first design</h2>
+  <p>No account. No API keys. No paid backend. Your cache stays on this device unless you export it. Clearing site data in the browser removes cached lineages.</p>
+
+  <h2>Contact</h2>
+  <p>For questions about this site, data use, or privacy, see the <a href="./privacy.html">Privacy</a> page. Operator contact details can be added there when the site is published on a public domain.</p>
+
+  <p class="note">Last updated: 11 October 2026</p>
+</main>
+
+<footer class="site-footer">
+  <span>© Lexicon Earth</span>
+  <span>
+    <a href="./index.html">Open atlas</a> ·
+    <a href="./privacy.html">Privacy</a> ·
+    <a href="./how-it-works.html">How it works</a>
+  </span>
+</footer>
+</body>
+</html>

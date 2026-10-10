@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f5f2e9">
+<meta name="description" content="How Lexicon Earth builds word lineages and maps them on the globe.">
+<title>How it works — Lexicon Earth</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/site.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="site-brand" href="./index.html">Lexicon Earth <small>/ Atlas 02</small></a>
+  <nav class="site-nav" aria-label="Site">
+    <a href="./index.html">Atlas</a>
+    <a href="./about.html">About</a>
+    <a href="./how-it-works.html" aria-current="page">How it works</a>
+    <a href="./privacy.html">Privacy</a>
+  </nav>
+</header>
+
+<main class="site-main">
+  <h1>How it works</h1>
+  <p class="lede">From a typed word to a globe path — what Lexicon Earth fetches, what it invents, and how to read the result.</p>
+
+  <h2>1. Search</h2>
+  <p>You enter an English word. The app asks Wiktionary for the matching page (trying common capitalizations), then looks for English etymology sections in the page wikitext.</p>
+  <p>If several etymologies exist (homographs), you can choose which sense to load. Optional multi-source mode can also query Wikidata and Kaikki.</p>
+
+  <h2>2. Parse a lineage</h2>
+  <p>Etymology templates in Wiktionary (inheritance, borrowing, derivation, and related forms) are parsed into a chain of word-forms. Each form keeps its language label, gloss when available, and epistemic status (attested, reconstructed, disputed).</p>
+  <p>Extracted prose summaries are labeled as extracted text — not quotations of scholarly consensus.</p>
+
+  <h2>3. Place forms on the map</h2>
+  <p>Languages are mapped to approximate heartlands (a point for the language’s historical or modern center). That is an association for visualization, not evidence that a specific inscription or speaker lived at that coordinate.</p>
+  <p>When a language code is missing from our table, that form may appear in the panel without a map marker. The globe bridges mapped neighbors so the journey still reads as a path.</p>
+
+  <h2>4. Read the journey</h2>
+  <ul>
+    <li><strong>Markers</strong> — one mapped form in the chain.</li>
+    <li><strong>Arcs</strong> — schematic links between consecutive mapped forms.</li>
+    <li><strong>Labels</strong> — word form plus origin place / civilization name when known.</li>
+    <li><strong>Journey slider</strong> — reveal the path over time.</li>
+    <li><strong>Panel</strong> — definition, timeline, relationship notes, and citations.</li>
+  </ul>
+
+  <div class="callout">
+    <p><strong>Example:</strong> Searching <em>orange</em> may show a chain through India, Persia, Arabia, and Western Europe. The arcs illustrate sequence in the extracted etymology — not a documented caravan route.</p>
+  </div>
+
+  <h2>5. Cache &amp; offline</h2>
+  <p>Successful lookups are stored locally. A small starter set ships with the app. After the first visit, a service worker can keep the shell, map data, and libraries available offline. New words still need the network.</p>
+
+  <h2>Limits worth knowing</h2>
+  <ul>
+    <li>Coverage is strongest for English entries on Wiktionary.</li>
+    <li>Reconstructed proto-forms are hypotheses; the UI marks them as such when possible.</li>
+    <li>Multi-source mode is slower and may return alternate candidate senses.</li>
+    <li>Always open the cited Wiktionary page for full context, footnotes, and debate.</li>
+  </ul>
+
+  <p class="note">Last updated: 11 October 2026</p>
+</main>
+
+<footer class="site-footer">
+  <span>© Lexicon Earth</span>
+  <span>
+    <a href="./index.html">Open atlas</a> ·
+    <a href="./about.html">About</a> ·
+    <a href="./privacy.html">Privacy</a>
+  </span>
+</footer>
+</body>
+</html>

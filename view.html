@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f5f2e9">
+<meta name="description" content="Lexicon Earth — local viewer for the etymological atlas and site pages.">
+<title>Lexicon Earth — Viewer</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #f5f2e9;
+  --ink: #191b19;
+  --muted: #74766f;
+  --line: rgba(25, 27, 25, 0.13);
+  --accent: #a74a36;
+  --teal: #4f6f6a;
+  --serif: "Playfair Display", Georgia, serif;
+  --sans: "DM Sans", system-ui, sans-serif;
+  --mono: "DM Mono", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background:
+    radial-gradient(1100px 520px at 8% -8%, rgba(79, 111, 106, 0.1), transparent 55%),
+    radial-gradient(800px 420px at 100% 0%, rgba(167, 74, 54, 0.07), transparent 50%),
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--teal); text-underline-offset: 2px; }
+a:hover { color: var(--ink); }
+
+.wrap {
+  width: min(880px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 48px 0 64px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: 600 28px/1.1 var(--serif);
+  letter-spacing: -0.035em;
+  margin: 0 0 8px;
+}
+.brand small {
+  font: 500 10px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lede {
+  margin: 0 0 28px;
+  max-width: 38em;
+  font: 500 17px/1.45 var(--serif);
+  color: var(--muted);
+}
+
+.note {
+  margin: 0 0 32px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 255, 255, 0.45);
+  font: 12px/1.55 var(--mono);
+  color: var(--muted);
+}
+.note code {
+  font-family: var(--mono);
+  color: var(--ink);
+  background: rgba(25, 27, 25, 0.06);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  .wrap { padding-top: 32px; }
+}
+
+.card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 22px 22px 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.52);
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.card:hover {
+  border-color: rgba(25, 27, 25, 0.35);
+  background: #fff;
+  transform: translateY(-1px);
+}
+.card.primary {
+  grid-column: 1 / -1;
+  background:
+    linear-gradient(135deg, rgba(10, 22, 40, 0.94), rgba(25, 27, 25, 0.9)),
+    #0a1628;
+  color: #f0eee6;
+  border-color: transparent;
+}
+.card.primary:hover {
+  background:
+    linear-gradient(135deg, rgba(12, 28, 48, 0.97), rgba(30, 32, 30, 0.94)),
+    #0a1628;
+  transform: translateY(-2px);
+}
+.card .eyebrow {
+  font: 500 10px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  margin-bottom: 10px;
+}
+.card.primary .eyebrow { color: #c8c4b8; opacity: 1; }
+.card h2 {
+  margin: 0 0 8px;
+  font: 600 24px/1.15 var(--serif);
+  letter-spacing: -0.03em;
+}
+.card.primary h2 { font-size: 30px; color: #fff; }
+.card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(25, 27, 25, 0.78);
+}
+.card.primary p { color: rgba(240, 238, 230, 0.78); }
+.card .go {
+  display: inline-block;
+  margin-top: 16px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+.card.primary .go { color: #e8e4d8; }
+
+.foot {
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font: 11px var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  justify-content: space-between;
+}
+.foot a { color: var(--muted); text-decoration: none; }
+.foot a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="brand">Lexicon Earth <small>/ Viewer</small></h1>
+    <p class="lede">Open the atlas and site pages from this folder. One place to jump into the live globe or the publisher pages.</p>
+
+    <p class="note">
+      For the full atlas (ES modules, GeoJSON, service worker), serve the folder locally, then open this page or <code>index.html</code>:<br><br>
+      <code>cd "Lexicon Earth" && python3 -m http.server 8080</code><br>
+      then visit <code>http://localhost:8080/view.html</code>
+    </p>
+
+    <div class="grid">
+      <a class="card primary" href="./index.html">
+        <div class="eyebrow">Main app</div>
+        <h2>Open the atlas</h2>
+        <p>Search a word, watch the schematic journey across languages and places on the globe.</p>
+        <span class="go">Launch →</span>
+      </a>
+
+      <a class="card" href="./about.html">
+        <div class="eyebrow">Site</div>
+        <h2>About</h2>
+        <p>What Lexicon Earth is, data sources, and local-first design.</p>
+        <span class="go">Read →</span>
+      </a>
+
+      <a class="card" href="./how-it-works.html">
+        <div class="eyebrow">Guide</div>
+        <h2>How it works</h2>
+        <p>Search → parse → map → how to read markers, arcs, and the panel.</p>
+        <span class="go">Read →</span>
+      </a>
+
+      <a class="card" href="./privacy.html">
+        <div class="eyebrow">Legal</div>
+        <h2>Privacy</h2>
+        <p>Local cache, third-party APIs, cookies, and advertising disclosures.</p>
+        <span class="go">Read →</span>
+      </a>
+
+      <a class="card" href="./lexicon-earth.html">
+        <div class="eyebrow">Legacy</div>
+        <h2>Classic one-file demo</h2>
+        <p>Older self-contained canvas demo (no Three.js modules). Useful offline snapshot.</p>
+        <span class="go">Open →</span>
+      </a>
+    </div>
+
+    <footer class="foot">
+      <span>© Lexicon Earth · local viewer</span>
+      <span>
+        <a href="./robots.txt">robots.txt</a> ·
+        <a href="./sitemap.xml">sitemap</a> ·
+        <a href="./manifest.webmanifest">manifest</a>
+      </span>
+    </footer>
+  </div>
+</body>
+</html>
