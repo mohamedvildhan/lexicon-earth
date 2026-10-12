@@ -503,7 +503,8 @@ header > * {
 
 .canvas-hint {
   position: absolute;
-  bottom: 72px;
+  /* Sit above Journey + legend row so empty-state copy never collides */
+  bottom: 108px;
   left: 50%;
   transform: translateX(-50%);
   font: 9px var(--mono);
@@ -514,6 +515,15 @@ header > * {
   pointer-events: none;
   z-index: 4;
   mix-blend-mode: difference;
+}
+
+.canvas-hint[hidden] {
+  display: none;
+}
+
+/* When a lineage legend is active, keep the explore hint off-screen */
+body:has(#arcLegend:not([hidden])) .canvas-hint {
+  display: none;
 }
 
 .empty-note {
@@ -559,13 +569,54 @@ header > * {
   opacity: 0;
   transform: translateY(18px);
   pointer-events: none;
-  transition: opacity 0.35s, transform 0.35s, max-height 0.3s;
+  transition: opacity 0.35s, transform 0.35s, max-height 0.3s, width 0.3s, padding 0.3s;
 }
 
 .info-panel.visible {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+/* Docked maximizable tab — keeps the active word while freeing the globe */
+.info-panel.visible.minimized {
+  width: min(168px, calc(42vw - 40px));
+  max-height: 40px;
+  overflow: hidden;
+  padding: 7px 8px 7px 12px;
+  cursor: pointer;
+}
+
+.info-panel.minimized .panel-top {
+  margin: 0;
+  gap: 8px;
+}
+
+.info-panel.minimized .panel-tab-title {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 14px/1.2 var(--serif);
+  color: var(--ink);
+}
+
+.info-panel.minimized #panelEyebrow,
+.info-panel.minimized .word-title,
+.info-panel.minimized .definition,
+.info-panel.minimized .etym-alts,
+.info-panel.minimized #gapNote,
+.info-panel.minimized .no-geo,
+.info-panel.minimized .stats,
+.info-panel.minimized .heartland-legend,
+.info-panel.minimized .timeline-head,
+.info-panel.minimized .timeline,
+.info-panel.minimized .panel-section,
+.info-panel.minimized .attrib,
+.info-panel.minimized .panel-footer {
+  display: none;
 }
 
 .panel-top {
@@ -577,36 +628,34 @@ header > * {
 
 .panel-top .eyebrow { color: var(--accent); }
 
-.panel-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.panel-tab-title {
+  display: none;
 }
 
-.panel-peek {
+.panel-toggle {
+  flex-shrink: 0;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.55);
   color: var(--muted);
-  font: 500 9px var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
   border-radius: 3px;
+  font: 500 16px/1 var(--mono);
   cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
 }
 
-.panel-peek:hover {
+.panel-toggle:hover {
   color: var(--ink);
   border-color: var(--ink);
 }
 
-.close-panel {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 20px;
-  cursor: pointer;
-  padding: 0 3px;
+.info-panel.minimized .panel-toggle {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
 }
 
 .lineage-summary {
@@ -632,28 +681,37 @@ header > * {
 .arc-legend {
   position: absolute;
   z-index: 8;
-  left: 50%;
-  bottom: 72px;
-  transform: translateX(-50%);
+  /* Sit above Journey, clear zoom/reset cluster (~190px) on the right */
+  right: 200px;
+  left: auto;
+  bottom: 66px;
+  transform: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
   gap: 6px 8px;
-  max-width: min(420px, calc(100% - 24px));
-  padding: 6px 12px;
+  max-width: min(420px, calc(100% - 240px));
+  padding: 6px 0;
   font: 500 9px var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #ffffff;
   mix-blend-mode: difference;
   pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Author `display:flex` otherwise overrides the HTML hidden attribute */
+.arc-legend[hidden] {
+  display: none !important;
 }
 
 .arc-legend-swatch {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  flex: none;
 }
 
 .arc-legend-swatch.oldest { background: #e04530; }
@@ -663,13 +721,16 @@ header > * {
   width: 36px;
   height: 3px;
   border-radius: 2px;
+  flex: none;
   background: linear-gradient(90deg, #e04530, #ef9a2e, #2fad8a, #3b8fd9);
 }
 
+.arc-legend-sep {
+  opacity: 0.55;
+}
+
 .arc-legend-dash {
-  flex-basis: 100%;
-  text-align: center;
-  opacity: 0.85;
+  opacity: 0.9;
   text-transform: none;
   letter-spacing: 0.02em;
 }
@@ -808,10 +869,32 @@ header > * {
 }
 
 .tag {
-  display: inline-block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
   margin-top: 6px;
   font: 9px var(--mono);
   color: #66675f;
+}
+
+.tag .st.geo-approximate,
+.tag .st.geo-uncertain,
+.tag .st.geo-period_only,
+.tag .st.geo-unavailable {
+  border: 1px solid var(--line);
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.tag .st.geo-uncertain {
+  border-color: rgba(176, 120, 40, 0.45);
+  color: #8a5a12;
+}
+
+.tag .st.geo-unavailable {
+  opacity: 0.8;
 }
 
 .panel-footer {
@@ -832,14 +915,30 @@ header > * {
   text-transform: uppercase;
   color: #ffffff;
   mix-blend-mode: difference;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, left 0.3s ease, bottom 0.3s ease;
+}
+
+/* Expanded panel covers this corner — hide the status line */
+body:has(#infoPanel.visible:not(.minimized)) .bottom-left {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Minimized tab docks bottom-left — park status to its right */
+body:has(#infoPanel.visible.minimized) .bottom-left {
+  left: calc(28px + min(168px, 42vw - 40px) + 14px);
+  bottom: 34px;
+  max-width: min(280px, calc(100vw - 220px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bottom-right {
   position: absolute;
-  z-index: 4;
-  bottom: 25px;
-  right: 30px;
+  z-index: 9;
+  bottom: 22px;
+  right: 24px;
   display: flex;
   gap: 7px;
   align-items: center;
@@ -931,6 +1030,97 @@ header > * {
 
 .attrib a { color: inherit; }
 
+.etym-alts {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+
+.etym-alts[hidden] {
+  display: none;
+}
+
+.etym-alts-intro {
+  font: 9px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.etym-alt {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.55);
+  padding: 5px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.etym-alt-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.etym-alt strong {
+  font: 500 12px/1.25 var(--serif);
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.etym-alt em {
+  flex-shrink: 0;
+  font: 500 8px/1.2 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--teal);
+}
+
+/* One-line definition in the box; full text drops open on hover */
+.etym-alt-gloss {
+  font: 11px/1.3 var(--serif);
+  color: #4a4c46;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-height: 1.3em;
+  transition: max-height 0.15s ease;
+}
+
+@media (hover: hover) {
+  .etym-alt:hover .etym-alt-gloss,
+  .etym-alt:focus-visible .etym-alt-gloss {
+    white-space: normal;
+    text-overflow: clip;
+    max-height: 5.2em;
+  }
+}
+
+.etym-alt:hover:not(:disabled),
+.etym-alt:focus-visible {
+  border-color: var(--ink);
+  z-index: 1;
+}
+
+.etym-alt.on,
+.etym-alt:disabled {
+  border-color: var(--ink);
+  background: rgba(25, 27, 25, 0.06);
+  cursor: default;
+}
+
 .others {
   display: flex;
   gap: 6px;
@@ -970,29 +1160,22 @@ header > * {
     width: min(200px, 52vw);
   }
   .empty-note strong { font-size: 14px; }
-  .canvas-hint { bottom: 58px; font-size: 8px; }
+  .canvas-hint { bottom: 120px; font-size: 8px; }
   .info-panel {
     left: 12px;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
     width: auto;
     max-height: 42vh;
     /* Bottom pad = Journey slider height so tags never sit under it */
     padding: 15px 16px calc(72px + env(safe-area-inset-bottom, 0px));
   }
-  .info-panel.peek {
-    max-height: 132px;
-  }
-  .info-panel.peek .timeline-head,
-  .info-panel.peek .timeline,
-  .info-panel.peek .panel-section,
-  .info-panel.peek .panel-footer,
-  .info-panel.peek .attrib,
-  .info-panel.peek .heartland-legend,
-  .info-panel.peek #gapNote .note,
-  .info-panel.peek #gapNote .wiki-link,
-  .info-panel.peek #gapNote .map-count {
-    display: none;
+  .info-panel.visible.minimized {
+    right: auto;
+    width: min(148px, calc(40vw - 20px));
+    max-height: 40px;
+    padding: 7px 8px 7px 12px;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
   }
   .word-title { font-size: 27px; margin: 7px 0 5px; }
   .definition { font-size: 12px; }
@@ -1006,15 +1189,26 @@ header > * {
   .bottom-left { left: 16px; bottom: 18px; font-size: 8px; }
   .bottom-right { right: 14px; bottom: 12px; gap: 5px; }
   .round-control { width: 32px; height: 32px; }
-  .info-panel.visible ~ .bottom-left,
-  .info-panel.visible ~ .empty-note { opacity: 0; }
+  body:has(#infoPanel.visible:not(.minimized)) .empty-note { opacity: 0; }
+  body:has(#infoPanel.visible.minimized) .bottom-left {
+    left: calc(12px + min(148px, 40vw - 20px) + 10px);
+    bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+    max-width: min(200px, calc(100vw - 180px));
+  }
   .toast { bottom: 60px; max-width: calc(100% - 28px); white-space: nowrap; }
   .globe-label { padding: 2px 6px 3px; }
   .globe-label-form { font-size: 12px; max-width: 110px; }
   .globe-label-lang { font-size: 7px; }
   .arc-legend {
-    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
     font-size: 8px;
+    max-width: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal;
+    row-gap: 4px;
   }
 }
 
@@ -1085,24 +1279,27 @@ header > * {
 }
 
 .no-geo {
-  position: absolute;
-  z-index: 4;
-  left: 50%;
-  bottom: 110px;
-  transform: translateX(-50%);
-  font: 10px var(--mono);
+  margin: 0 0 10px;
+  font: 10px/1.45 var(--mono);
   color: var(--accent);
-  background: rgba(245, 242, 233, 0.9);
-  padding: 6px 10px;
-  border: 1px solid var(--line);
+  background: rgba(224, 69, 48, 0.06);
+  padding: 7px 9px;
+  border: 1px solid rgba(224, 69, 48, 0.22);
+  border-radius: 3px;
+}
+
+.no-geo[hidden] {
+  display: none;
 }
 
 .timeline-bar {
   position: absolute;
   z-index: 8;
-  left: 50%;
-  bottom: 28px;
-  transform: translateX(-50%);
+  /* Leave a clear gap before reset/zoom controls (cluster ≈ 190px wide) */
+  right: 200px;
+  left: auto;
+  bottom: 22px;
+  transform: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1117,15 +1314,19 @@ header > * {
   box-shadow: 0 6px 22px rgba(25, 27, 25, 0.14);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  max-width: min(280px, calc(100vw - 260px));
 }
 
 .timeline-bar label {
   color: var(--ink);
   opacity: 1;
+  flex: none;
 }
 
 .timeline-bar input[type="range"] {
-  width: min(220px, 36vw);
+  width: min(140px, 18vw);
+  min-width: 72px;
+  flex: 1 1 auto;
   accent-color: var(--teal);
   height: 4px;
 }
@@ -1313,22 +1514,24 @@ header > * {
   .spinner { animation: none; border-top-color: var(--muted); }
 }
 
-@media (min-width: 761px) {
-  .panel-peek { display: none; }
-}
-
 @media (max-width: 760px) {
   .timeline-bar {
     left: 12px;
     right: 12px;
+    max-width: none;
     transform: none;
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     justify-content: space-between;
-    z-index: 9;
+    z-index: 8;
   }
-  .bottom-right { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
-  .no-geo { bottom: 140px; max-width: calc(100% - 24px); text-align: center; }
-  .panel-peek { display: inline-block; }
+  .timeline-bar input[type="range"] {
+    width: auto;
+    max-width: none;
+  }
+  .bottom-right {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    right: 14px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

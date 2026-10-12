@@ -7,11 +7,11 @@ import {
   EPISTEMIC,
   GEO_BASIS,
 } from "../model.js";
-import { LG, regionOf } from "../languages.js";
+import { lookupLanguage, GEO_CONFIDENCE } from "../languages.js";
 
 const SPARQL = "https://query.wikidata.org/sparql";
 
-/** Map common language labels → ISO-ish codes in LG */
+/** Map common language labels → ISO-ish / Wiktionary codes */
 const LANG_ALIAS = {
   english: "en",
   dutch: "nl",
@@ -44,30 +44,33 @@ const LANG_ALIAS = {
 };
 
 function langGeo(label) {
-  const key = String(label || "").toLowerCase();
-  const code = LANG_ALIAS[key];
-  const L = code && LG[code];
-  if (!L) {
+  const key = String(label || "").toLowerCase().trim();
+  const aliased = LANG_ALIAS[key];
+  const L = lookupLanguage(aliased || key);
+  const known = Boolean(aliased) || L.name !== L.code;
+  if (!known && L.lat == null) {
     return {
       language: label || "Unknown",
-      languageCode: code || null,
+      languageCode: aliased || null,
       region: "",
       lat: null,
       lon: null,
       geoBasis: GEO_BASIS.none,
+      geoConfidence: GEO_CONFIDENCE.unavailable,
       note: "No mapped language heartland for this Wikidata language label.",
     };
   }
   return {
-    language: L[0],
-    languageCode: code,
-    region: regionOf(code),
-    lat: L[1],
-    lon: L[2],
-    yearStart: L[3],
-    yearEnd: L[4],
-    geoBasis: GEO_BASIS.language_heartland,
-    note: (L[5] ? L[5] + " " : "") + "Inferred geographic association from language range.",
+    language: known ? L.name : label || L.name,
+    languageCode: L.code,
+    region: L.region || "",
+    lat: L.lat,
+    lon: L.lon,
+    yearStart: L.yearStart,
+    yearEnd: L.yearEnd,
+    geoBasis: L.lat != null ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+    geoConfidence: L.geoConfidence || GEO_CONFIDENCE.unavailable,
+    note: L.note || "",
   };
 }
 
@@ -199,6 +202,7 @@ LIMIT 80`;
         lat: g.lat,
         lon: g.lon,
         geoBasis: g.lat != null ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+        geoConfidence: g.geoConfidence || GEO_CONFIDENCE.unavailable,
         epistemic: reconstructed ? EPISTEMIC.reconstructed : EPISTEMIC.attested,
         note: g.note,
         citationIds,

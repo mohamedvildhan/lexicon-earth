@@ -21,11 +21,15 @@ export const EPISTEMIC = Object.freeze({
   inferred_geo: "inferred_geo",
 });
 
-/** Strip Wiktionary anchors / underscores from forms. */
+/** Strip Wiktionary anchors, wiki-links, and underscores from forms. */
 export function cleanForm(form) {
   return String(form ?? "")
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1")
+    .replace(/\{\{(?:m|l|mention|link)\|[^|}]*\|([^|}]*)[^}]*\}\}/gi, "$1")
+    .replace(/\{\{[^}]*\}\}/g, "")
     .replace(/#[^\s]*/g, "")
     .replace(/_/g, " ")
+    .replace(/\s*,\s*/g, ", ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -165,10 +169,18 @@ export function makeNode({
   lat = null,
   lon = null,
   geoBasis = GEO_BASIS.none,
+  geoConfidence = null,
   epistemic = EPISTEMIC.attested,
   note = "",
   citationIds = [],
 }) {
+  const conf =
+    geoConfidence ||
+    (lat == null || lon == null
+      ? "unavailable"
+      : epistemic === EPISTEMIC.reconstructed
+        ? "uncertain"
+        : "precise");
   return {
     id: nid("form"),
     form,
@@ -182,6 +194,7 @@ export function makeNode({
     lat,
     lon,
     geoBasis,
+    geoConfidence: conf,
     epistemic,
     note,
     citationIds: [...citationIds],
@@ -277,6 +290,7 @@ export function toGlobePayload(record) {
     n.region = n.region || regionOf(n.languageCode) || "";
     n.place = n.region || n.language;
     n.status = n.epistemic === EPISTEMIC.inferred_geo ? "uncertain" : n.epistemic;
+    n.geoConfidence = n.geoConfidence || (n.lat == null ? "unavailable" : "precise");
     n.geo = true;
   });
 
@@ -339,7 +353,13 @@ export function toGlobePayload(record) {
     });
   }
 
-  return { nodes: geoNodes, arcs, hasGeo: geoNodes.length >= 2 };
+  return {
+    nodes: geoNodes,
+    arcs,
+    /* At least one pin is enough to rest the camera; paths need 2+ */
+    hasGeo: geoNodes.length >= 1,
+    hasPath: geoNodes.length >= 2,
+  };
 }
 
 export function topologicalOrder(nodes, edges) {

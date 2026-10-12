@@ -43,7 +43,7 @@
       <a href="./privacy.html">Privacy</a>
     </nav>
     <label class="source-toggle" title="Include Wikidata & Kaikki (slower)">
-      <input type="checkbox" id="multiSourceToggle">
+      <input type="checkbox" id="multiSourceToggle" checked>
       <span>Multi-source</span>
     </label>
     <span class="status" id="status">Live · Wiktionary</span>
@@ -70,13 +70,10 @@
   <canvas id="globeCanvas" aria-label="Interactive 3D globe showing the geographical journey of a word"></canvas>
   <div class="globe-labels" id="globeLabels" aria-hidden="true"></div>
 </div>
-<div class="canvas-hint">Drag to explore · Select a node</div>
+<div class="canvas-hint" id="canvasHint">Drag to explore · Select a node</div>
 <div class="empty-note" id="emptyNote">
-  <strong>Words travel farther than we do.</strong>
   Follow a word across languages, empires and centuries. Starter words are cached for offline use.
 </div>
-<p class="no-geo" id="noGeoNote" hidden>Evidence does not support a meaningful map path — see lineage below.</p>
-
 <div class="bottom-left" id="coordsLabel">Earth · Vector wireframe · Natural Earth</div>
 <div class="bottom-right">
   <button class="round-control" id="resetBtn" aria-label="Reset globe rotation" title="Reset rotation">↺</button>
@@ -91,7 +88,8 @@
   <span class="arc-legend-grad" aria-hidden="true"></span>
   <span>Newest</span>
   <span class="arc-legend-swatch newest" aria-hidden="true"></span>
-  <span class="arc-legend-dash">Dashed = bridged (unmapped stage skipped)</span>
+  <span class="arc-legend-sep" aria-hidden="true">·</span>
+  <span class="arc-legend-dash">Dashed = skipped stage</span>
 </div>
 
 <div class="timeline-bar">
@@ -101,21 +99,21 @@
 
 <aside class="info-panel" id="infoPanel" aria-live="polite" aria-hidden="true" inert>
   <div class="panel-top">
-    <span class="eyebrow">Etymological lineage</span>
-    <div class="panel-top-actions">
-      <button type="button" class="panel-peek" id="panelPeekBtn" aria-expanded="true" title="Collapse panel to a peek">Peek</button>
-      <button class="close-panel" id="closePanel" aria-label="Close word details">×</button>
-    </div>
+    <span class="eyebrow" id="panelEyebrow">Etymological lineage</span>
+    <span class="panel-tab-title" id="panelTabTitle" hidden>—</span>
+    <button type="button" class="panel-toggle" id="panelToggle" aria-expanded="true" aria-controls="infoPanel" title="Minimize panel" aria-label="Minimize panel">−</button>
   </div>
   <h1 class="word-title" id="panelTitle">—</h1>
   <p class="definition" id="panelDefinition"></p>
+  <div class="etym-alts" id="etymAlternatives" hidden></div>
   <div class="note" id="gapNote"></div>
+  <p class="no-geo" id="noGeoNote" hidden>Evidence does not support a meaningful map path — see lineage below.</p>
   <div class="stats">
     <div class="stat"><strong id="statSteps">0</strong><span>Forms</span></div>
     <div class="stat"><strong id="statSpan">—</strong><span id="statSpanLabel">Language period</span></div>
     <div class="stat"><strong id="statRegions">0</strong><span>Uncertain links</span></div>
   </div>
-  <p class="heartland-legend" id="heartlandLegend" hidden title="Map pins use language heartlands, not attested word-travel routes.">Geographic association = language heartland (inferred)</p>
+  <p class="heartland-legend" id="heartlandLegend" hidden title="Map pins use language heartlands, not attested word-travel routes.">Geographic association = language heartland (inferred). Some positions are approximate or reconstructed — see per-stage notes.</p>
   <div class="timeline-head">
     <span>Language & form</span>
     <span id="timelineCount">—</span>

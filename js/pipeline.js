@@ -21,8 +21,8 @@ const FETCH_TIMEOUTS = {
 let searchSeq = 0;
 let activeAbort = null;
 
-/** Default: Wiktionary-only for speed. Toggle via setMultiSource(true). */
-let multiSource = false;
+/** Default: Multi-source on. Toggle via setMultiSource(false) for Wiktionary-only. */
+let multiSource = true;
 
 export function setMultiSource(on) {
   multiSource = !!on;
@@ -232,6 +232,21 @@ export async function fetchAndCache(candidate, { original, query, onProgress, se
     throw new Error(`${adapter.name} returned no etymology record for “${candidate.lemma}”.`);
   }
 
+  const senseGloss = String(candidate.gloss || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sensePos = String(candidate.pos || lineage.pos || "")
+    .toLowerCase()
+    .trim();
+  const fromSense =
+    senseGloss &&
+    !/^wikidata\b/i.test(senseGloss) &&
+    !/^(no dedicated etymology)/i.test(senseGloss)
+      ? sensePos
+        ? `${sensePos} — ${senseGloss.length > 320 ? senseGloss.slice(0, 317) + "…" : senseGloss}`
+        : senseGloss
+      : "";
+
   const record = makeRecord({
     query: (query || candidate.lemma).toLowerCase(),
     queryOriginal: original || candidate.lemma,
@@ -239,7 +254,8 @@ export async function fetchAndCache(candidate, { original, query, onProgress, se
     language: lineage.language || candidate.language,
     languageCode: lineage.languageCode || candidate.languageCode || "en",
     sense: lineage.sense || candidate.sense || "",
-    definition: lineage.definition || "",
+    /* Sense gloss wins so switching etymologies updates the panel header */
+    definition: fromSense || lineage.definition || "",
     nodes: lineage.nodes,
     edges: lineage.edges || [],
     citations: lineage.citations || [],
@@ -248,9 +264,11 @@ export async function fetchAndCache(candidate, { original, query, onProgress, se
     alternatives: lineage.alternatives || [],
     primarySource: adapter.id,
   });
+  record.pos = sensePos || "";
 
   const key = cacheKey(record.query, record.languageCode, candidate.id || record.sense || "0");
   record.cacheKey = key;
+  record.candidateId = candidate.id || key;
   await putEntry(key, record);
   discoveryCache.delete(discoveryKey(record.query));
   discoveryCache.delete(`${record.query}|wikt`);
@@ -361,8 +379,9 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
   }
 
   try {
-    const record = await fetchAndCache(only, { original, query, onProgress, seq, signal });
+    let record = await fetchAndCache(only, { original, query, onProgress, seq, signal });
     if (record?.cancelled || seq !== searchSeq) return { status: "cancelled" };
+    record = await supplementWithWikidata(record, { original, query, signal, onProgress });
     return { status: "ready", record, errors: discovery.errors };
   } catch (e) {
     if (e?.name === "AbortError" || seq !== searchSeq) return { status: "cancelled" };
@@ -378,8 +397,82 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
   }
 }
 
+/**
+ * When Multi-source is on and Wiktionary is primary, quietly attach Wikidata
+ * as a supplemental citation / alternative — never replace a richer Wiktionary chain.
+ */
+async function supplementWithWikidata(record, { original, query, signal, onProgress } = {}) {
+  if (!multiSource || record.primarySource !== "wiktionary") return record;
+  const wd = getAdapter("wikidata");
+  if (!wd) return record;
+  try {
+    onProgress?.("Checking Wikidata lexemes…");
+    const cands = await withTimeout(
+      wd.searchCandidates(query || record.query, { languageTag: "en", signal }),
+      ADAPTER_TIMEOUTS.wikidata,
+      "wikidata"
+    );
+    const hit = (cands || []).find((c) => !c.meta?.suggestion);
+    if (!hit) return record;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    let lineage;
+    try {
+      lineage = await withTimeout(
+        wd.fetchLineage(hit, { signal: ctrl.signal }),
+        FETCH_TIMEOUTS.wikidata,
+        "wikidata",
+        ctrl
+      );
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+    if (!lineage?.nodes?.length) return record;
+    const wiktNodes = record.nodes?.length || 0;
+    const wdNodes = lineage.nodes.length;
+    /* Only attach as alternative / citation — never swap a thinner graph in */
+    const cit = lineage.citations?.[0];
+    if (cit && !(record.citations || []).some((c) => c.url === cit.url)) {
+      record.citations = [...(record.citations || []), cit];
+    }
+    if (!record.sourcesUsed.includes("wikidata")) {
+      record.sourcesUsed = [...record.sourcesUsed, "wikidata"];
+    }
+    record.alternatives = [
+      ...(record.alternatives || []),
+      {
+        sourceId: "wikidata",
+        lemma: lineage.word || hit.lemma,
+        nodeCount: wdNodes,
+        note:
+          wdNodes < wiktNodes
+            ? "Wikidata lexeme graph is thinner than Wiktionary; kept as a supplemental citation only."
+            : "Wikidata lexeme graph attached as a supplemental source (Wiktionary remains primary).",
+      },
+    ];
+    if (wdNodes < wiktNodes) {
+      record.gaps = [
+        ...(record.gaps || []),
+        "Wikidata offered a shorter structured chain — Wiktionary lineage kept as primary.",
+      ];
+    }
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+    /* silent — Wikidata is optional */
+  }
+  return record;
+}
+
 export async function selectCandidate(candidate, ctx = {}) {
   const seq = ++searchSeq;
   const abort = beginSearchAbort();
-  return fetchAndCache(candidate, { ...ctx, seq, signal: abort.signal });
+  const record = await fetchAndCache(candidate, { ...ctx, seq, signal: abort.signal });
+  if (record?.cancelled) return record;
+  return supplementWithWikidata(record, {
+    original: ctx.original,
+    query: ctx.query || candidate.lemma,
+    signal: abort.signal,
+    onProgress: ctx.onProgress,
+  });
 }

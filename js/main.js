@@ -19,6 +19,7 @@ import {
   isBadGapText,
   sanitizeRecordGaps,
 } from "./model.js";
+import { atlasStats, ATLAS_META, GEO_DISCLAIMER } from "./languages.js";
 import { listSourceCredits } from "./sources/index.js";
 import { createTypeahead } from "./typeahead.js";
 import {
@@ -210,43 +211,80 @@ function setLoading(on, label = "Looking up…") {
   }
 }
 
-function setPanelOpen(on) {
+function syncPanelToggle(minimized) {
+  const btn = $("panelToggle");
+  const tab = $("panelTabTitle");
+  const eyebrow = $("panelEyebrow");
+  if (btn) {
+    btn.textContent = minimized ? "+" : "−";
+    btn.setAttribute("aria-expanded", minimized ? "false" : "true");
+    btn.setAttribute("aria-label", minimized ? "Expand panel" : "Minimize panel");
+    btn.title = minimized ? "Expand panel" : "Minimize panel";
+  }
+  if (tab) {
+    const label = stripDisplayText(active?.word || active?.queryOriginal || "Word");
+    tab.textContent = label;
+    tab.hidden = !minimized;
+  }
+  if (eyebrow) eyebrow.hidden = !!minimized;
+}
+
+function setPanelMinimized(on) {
+  const panel = $("infoPanel");
+  if (!panel || !panel.classList.contains("visible")) return;
+  panel.classList.toggle("minimized", !!on);
+  syncPanelToggle(!!on);
+}
+
+function setPanelOpen(on, { minimized = false } = {}) {
   const panel = $("infoPanel");
   if (!panel) return;
   panel.classList.toggle("visible", !!on);
+  if (!on) panel.classList.remove("minimized");
+  else panel.classList.toggle("minimized", !!minimized);
   panel.setAttribute("aria-hidden", on ? "false" : "true");
   if (on) panel.removeAttribute("inert");
   else panel.setAttribute("inert", "");
+  if (on) syncPanelToggle(!!minimized);
 }
 
-function showRecord(record) {
+function showRecord(record, opts = {}) {
   active = sanitizeRecordGaps(record);
-  pendingCandidates = null;
+  if (Object.prototype.hasOwnProperty.call(opts, "siblings")) {
+    pendingCandidates = opts.siblings?.length ? opts.siblings : null;
+  } else {
+    pendingCandidates = null;
+  }
   const payload = toGlobePayload(record);
   const ordered = topologicalOrder(record.nodes, record.edges);
   selectedNode = payload.nodes[0] || ordered[0] || null;
 
   $("searchInput").value = record.queryOriginal || record.word;
   syncClearBtn();
-  setPanelOpen(true);
-  $("infoPanel")?.classList.remove("peek");
-  const peekBtn = $("panelPeekBtn");
-  if (peekBtn) {
-    peekBtn.textContent = "Peek";
-    peekBtn.setAttribute("aria-expanded", "true");
-  }
+  setPanelOpen(true, { minimized: false });
   $("emptyNote").style.display = "none";
+  if ($("canvasHint")) $("canvasHint").hidden = true;
 
   if (payload.hasGeo) {
     globe.setGraph(payload, selectedNode);
     globe.frameRegion(payload.nodes);
     zoom = globe.getZoomFactor();
     $("zoomLabel").textContent = Math.round(zoom * 100) + "%";
-    $("coordsLabel").textContent = `${payload.nodes.length} mapped · ${record.word.toUpperCase()} · schematic routes`;
-    $("noGeoNote").hidden = true;
+    if (payload.hasPath) {
+      $("coordsLabel").textContent = `${payload.nodes.length} mapped · ${record.word.toUpperCase()} · schematic routes`;
+      $("noGeoNote").hidden = true;
+    } else {
+      $("coordsLabel").textContent = `1 mapped · ${record.word.toUpperCase()} · single form`;
+      $("noGeoNote").textContent =
+        "Only one form is mapped — no path between languages. Globe is resting on that location.";
+      $("noGeoNote").hidden = false;
+    }
   } else {
     globe.setGraph({ nodes: [], arcs: [] });
+    globe.setIdleSpin(true);
     $("coordsLabel").textContent = `No map path · ${record.word.toUpperCase()}`;
+    $("noGeoNote").textContent =
+      "Evidence does not support a meaningful map path — see lineage below.";
     $("noGeoNote").hidden = false;
   }
   renderPanel();
@@ -259,11 +297,83 @@ function wiktionaryUrl(record) {
   return title ? `https://en.wiktionary.org/wiki/${encodeURIComponent(title)}` : null;
 }
 
+function candidateMatchesRecord(c, r) {
+  if (!c || !r) return false;
+  if (r.candidateId && c.id && r.candidateId === c.id) return true;
+  const sameLang = (c.languageCode || "en") === (r.languageCode || "en");
+  if (sameLang && c.sense && r.sense && c.sense === r.sense) return true;
+  if (sameLang && c.meta?.etyIndex != null && /etymology\s+(\d+)/i.test(r.sense || "")) {
+    const m = /etymology\s+(\d+)/i.exec(r.sense);
+    if (m && Number(m[1]) - 1 === c.meta.etyIndex) return true;
+  }
+  return false;
+}
+
+function renderEtymAlternatives() {
+  const host = $("etymAlternatives");
+  if (!host) return;
+  host.replaceChildren();
+  const list = pendingCandidates;
+  if (!list || list.length < 2 || !active) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+
+  const intro = document.createElement("div");
+  intro.className = "etym-alts-intro";
+  intro.textContent = `${list.length} etymologies — choose a sense:`;
+  host.appendChild(intro);
+
+  list.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "etym-alt" + (candidateMatchesRecord(c, active) ? " on" : "");
+    b.innerHTML =
+      `<span class="etym-alt-row"><strong></strong><em></em></span>` +
+      `<span class="etym-alt-gloss"></span>`;
+    const pos = c.pos ? String(c.pos).toLowerCase() : "";
+    const sense = c.sense || "Entry";
+    const senseLabel = /^etymology$/i.test(sense.trim())
+      ? `Etymology ${i + 1}`
+      : sense;
+    b.querySelector("strong").textContent = pos
+      ? `${c.lemma} · ${pos}`
+      : `${c.lemma} · ${c.language || "English"}`;
+    b.querySelector("em").textContent = senseLabel;
+    const gloss = stripDisplayText(c.gloss || "");
+    const detail =
+      gloss && !/^english\b/i.test(gloss) && gloss !== sense ? gloss : "";
+    b.querySelector(".etym-alt-gloss").textContent = detail || senseLabel;
+    b.disabled = candidateMatchesRecord(c, active);
+    b.addEventListener("click", async () => {
+      if (candidateMatchesRecord(c, active)) return;
+      const siblings = pendingCandidates;
+      setLoading(true, `Loading ${c.lemma} (${sense})…`);
+      try {
+        const record = await selectCandidate(c, {
+          original: lastQuery || c.lemma,
+          query: normalizeQuery(lastQuery || c.lemma).keyForm,
+        });
+        if (record?.cancelled) return;
+        setLoading(false);
+        setMessage("");
+        showRecord(record, { siblings });
+      } catch (e) {
+        setLoading(false);
+        setMessage(e.message || "Failed to load entry.");
+      }
+    });
+    host.appendChild(b);
+  });
+}
+
 function renderPanel() {
   const r = active;
   if (!r) return;
   $("panelTitle").textContent = stripDisplayText(r.word);
   $("panelDefinition").textContent = stripDisplayText(r.definition) || "Definition unavailable.";
+  renderEtymAlternatives();
 
   const N = topologicalOrder(r.nodes, r.edges);
   const mapped = N.filter((n) => n.lat != null && n.lon != null);
@@ -327,7 +437,12 @@ function renderPanel() {
 
   const legend = $("heartlandLegend");
   if (legend) {
-    legend.hidden = !N.some((n) => n.geoBasis === "language_heartland");
+    const hasHeartland = N.some((n) => n.geoBasis === "language_heartland");
+    legend.hidden = !hasHeartland;
+    if (hasHeartland) {
+      legend.textContent =
+        "Geographic association = language heartland (inferred). Some positions are approximate or reconstructed — see per-stage notes.";
+    }
   }
 
   const tl = $("panelTimeline");
@@ -367,13 +482,35 @@ function renderPanel() {
     c.className = "st " + epi;
     c.textContent = STATUS_LABEL[epi] || epi;
     tg.append(c);
+    const conf = n.geoConfidence || (n.lat == null ? "unavailable" : "precise");
+    if (conf && conf !== "precise") {
+      const confTag = document.createElement("span");
+      confTag.className = "st geo-" + conf;
+      confTag.textContent =
+        conf === "approximate"
+          ? "Approx. position"
+          : conf === "uncertain"
+            ? "Uncertain homeland"
+            : conf === "period_only"
+              ? "Period (parent region)"
+              : "Unmapped";
+      tg.append(confTag);
+    }
     const note = stripDisplayText(n.note);
+    const disclaimer = GEO_DISCLAIMER[conf] || "";
+    const shownNotes = [];
     if (note && !/geographic association|language heartland|language range/i.test(note)) {
+      shownNotes.push(note);
+    }
+    if (disclaimer && !shownNotes.some((t) => t.includes(disclaimer.slice(0, 20)))) {
+      shownNotes.push(disclaimer);
+    }
+    shownNotes.forEach((t) => {
       const d = document.createElement("div");
       d.className = "note";
-      d.textContent = note;
+      d.textContent = t;
       tg.append(d);
-    }
+    });
     el.addEventListener("click", () => {
       selectedNode = n;
       if (n.lat != null) {
@@ -438,10 +575,17 @@ function renderPanel() {
   }
 
   const cached = r.fromCache ? " · from local cache" : "";
+  const stats = atlasStats();
+  const atlasLine =
+    stats.withCoords > 0
+      ? ` Language atlas: ${stats.withCoords.toLocaleString()} mapped / ${stats.total.toLocaleString()} codes (Wiktionary + Glottolog).`
+      : "";
   $("attrib").innerHTML =
     `Sources: ${(r.sourcesUsed || []).join(", ") || "—"}${cached}. ` +
     `Wiktionary content © contributors · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. ` +
-    `Routes are schematic language associations, not attested itineraries.`;
+    `Heartlands: <a href="https://glottolog.org/" target="_blank" rel="noopener">Glottolog</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.` +
+    atlasLine +
+    ` Routes are schematic language associations, not attested itineraries.`;
 
   $("arcLegend")?.removeAttribute("hidden");
 }
@@ -495,8 +639,8 @@ async function chooseWord(raw) {
   $("searchInput")?.blur();
   setLoading(true, navigator.onLine ? "Searching dictionaries…" : "Checking local cache…");
   $("retryBtn").hidden = true;
-  setPanelOpen(false);
-  $("infoPanel")?.classList.remove("peek");
+  /* Keep current word as a docked tab while a new search runs */
+  if (active) setPanelMinimized(true);
   syncClearBtn();
 
   const result = await searchWord(query, {
@@ -515,7 +659,25 @@ async function chooseWord(raw) {
     return;
   }
   if (result.status === "candidates") {
-    renderCandidates(result.candidates, result.original || query);
+    const list = result.candidates;
+    const first = list[0];
+    setLoading(true, `Loading ${first.lemma} (${first.sense || "entry"})…`);
+    try {
+      const record = await selectCandidate(first, {
+        original: result.original || query,
+        query: result.query || query,
+      });
+      if (record?.cancelled) return;
+      setLoading(false);
+      setMessage("");
+      pushRecent(result.original || record.queryOriginal || record.word || query);
+      showRecord(record, { siblings: list });
+    } catch (e) {
+      setLoading(false);
+      /* Fallback: picker under search if auto-load fails */
+      renderCandidates(list, result.original || query);
+      setMessage(e.message || "Choose a sense below.");
+    }
     return;
   }
   if (result.status === "suggestions") {
@@ -523,7 +685,7 @@ async function chooseWord(raw) {
     wrap.className = "suggest-wrap";
     const intro = document.createElement("div");
     intro.className = "suggest-intro";
-    intro.textContent = `No English entry for “${query}”. Try:`;
+    intro.textContent = `No Wiktionary entry for “${query}”. Try:`;
     wrap.appendChild(intro);
     const row = document.createElement("div");
     row.className = "suggest-row";
@@ -546,7 +708,7 @@ async function chooseWord(raw) {
       row.append(b);
     });
     if (!row.childElementCount) {
-      setMessage(`No English entry found for “${query}”.`);
+      setMessage(`No Wiktionary entry found for “${query}”.`);
       return;
     }
     wrap.appendChild(row);
@@ -577,7 +739,12 @@ globe.onSelect = (n) => {
     item?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   });
 };
-
+/* Keep Journey slider in lockstep with arc/marker draw animation */
+globe.onTimeline = (t) => {
+  const el = $("timelineRange");
+  if (!el || document.activeElement === el) return;
+  el.value = String(Math.round(t * 100));
+};
 function updateZoom() {
   $("zoomLabel").textContent = Math.round(zoom * 100) + "%";
   globe.setZoomFactor(zoom);
@@ -593,32 +760,30 @@ $("searchForm").addEventListener("submit", (e) => {
 
 $("retryBtn").addEventListener("click", () => chooseWord(lastQuery || $("searchInput").value));
 
-$("panelPeekBtn")?.addEventListener("click", () => {
+function togglePanelMinimized() {
   const panel = $("infoPanel");
-  if (!panel?.classList.contains("visible")) return;
-  panel.classList.toggle("peek");
-  const peek = panel.classList.contains("peek");
-  $("panelPeekBtn").textContent = peek ? "Expand" : "Peek";
-  $("panelPeekBtn").setAttribute("aria-expanded", peek ? "false" : "true");
+  if (!panel?.classList.contains("visible") || !active) return;
+  setPanelMinimized(!panel.classList.contains("minimized"));
+}
+
+$("panelToggle")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  togglePanelMinimized();
 });
 
-$("closePanel").addEventListener("click", () => {
-  setPanelOpen(false);
-  active = null;
-  selectedNode = null;
-  globe.setGraph({ nodes: [], arcs: [] });
-  globe.setIdleSpin(true);
-  globe.targetDistance = Math.max(globe.targetDistance, 2.05);
-  zoom = globe.getZoomFactor();
-  $("zoomLabel").textContent = Math.round(zoom * 100) + "%";
-  $("emptyNote").style.display = "";
-  $("coordsLabel").textContent = "Earth · Vector wireframe · Natural Earth";
-  $("searchInput").value = "";
-  setMessage("");
-  $("noGeoNote").hidden = true;
-  $("arcLegend")?.setAttribute("hidden", "");
-  $("infoPanel")?.classList.remove("peek");
-  syncClearBtn();
+$("infoPanel")?.addEventListener("click", (e) => {
+  const panel = $("infoPanel");
+  if (!panel?.classList.contains("minimized")) return;
+  if (e.target.closest("#panelToggle")) return;
+  setPanelMinimized(false);
+});
+
+$("infoPanel")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const panel = $("infoPanel");
+  if (!panel?.classList.contains("minimized")) return;
+  e.preventDefault();
+  setPanelMinimized(false);
 });
 
 $("resetBtn").addEventListener("click", () => {
@@ -657,6 +822,16 @@ function openAboutModal() {
     li.querySelector("span").textContent = `${s.license}; ${s.attribution}`;
     list.appendChild(li);
   });
+  const stats = atlasStats();
+  const tag = ATLAS_META.glottologTag ? ` · ${ATLAS_META.glottologTag}` : "";
+  const atlas = document.createElement("li");
+  atlas.innerHTML =
+    `<a href="https://glottolog.org/" target="_blank" rel="noopener">Glottolog</a> language heartlands (CC BY 4.0) + Wiktionary language modules (CC BY-SA 4.0)` +
+    (stats.total
+      ? ` — atlas ${stats.withCoords.toLocaleString()} mapped / ${stats.total.toLocaleString()} codes${tag}`
+      : "") +
+    `.`;
+  list.appendChild(atlas);
   const geo = document.createElement("li");
   geo.innerHTML =
     `<a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> land & coastline (1:50m, public domain) — B&W topographic wireframe rendered in-app.`;
@@ -769,7 +944,12 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     const dlg = $("aboutModal");
     if (dlg?.open) closeAboutModal();
-    else if ($("infoPanel")?.classList.contains("visible")) $("closePanel")?.click();
+    else if (
+      $("infoPanel")?.classList.contains("visible") &&
+      !$("infoPanel").classList.contains("minimized")
+    ) {
+      setPanelMinimized(true);
+    }
   }
   if (e.key === "/" && document.activeElement !== $("searchInput")) {
     e.preventDefault();

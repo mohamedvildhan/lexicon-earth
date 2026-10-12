@@ -140,6 +140,8 @@ export class Globe {
     this.selectedIdx = -1;
     this.hoverIdx = -1;
     this.onSelect = null;
+    /** @type {((t: number) => void) | null} Fired when journey progress changes (0–1). */
+    this.onTimeline = null;
     this.animProgress = 1;
     this._animTarget = 1;
     this._flowT = 0;
@@ -147,6 +149,7 @@ export class Globe {
     this._journeyDuration = 0;
     this._journeyCam = null;
     this._manualTimeline = false;
+    this._lastTimelineEmit = -1;
 
     this.rot = { lat: DEFAULT_LAT, lon: DEFAULT_LON };
     this.target = { lat: DEFAULT_LAT, lon: DEFAULT_LON };
@@ -454,9 +457,10 @@ export class Globe {
       this.focus(geo[0].lat, geo[0].lon);
       this.targetDistance = Math.min(endDist + 0.12, DEFAULT_DIST + 0.15);
     } else {
+      /* Single pin (or reduced motion): rest on that location, no tour */
       this._journeyCam = null;
       this.focus(center.lat, center.lon);
-      this.targetDistance = endDist;
+      this.targetDistance = geo.length === 1 ? Math.min(endDist, 2.05) : endDist;
     }
     this.onZoom?.(this.getZoomFactor());
   }
@@ -492,6 +496,7 @@ export class Globe {
     this._animTarget = 1;
     this._manualTimeline = false;
     this._journeyStart = performance.now();
+    this._lastTimelineEmit = -1;
     /* ~1.35s per hop so travel between locations stays readable */
     const hops = Math.max(1, Math.max(nodes.length - 1, this.arcs.length));
     this._journeyDuration = this.reducedMotion
@@ -500,8 +505,19 @@ export class Globe {
     if (!nodes.length) {
       this.setIdleSpin(true);
       this._journeyCam = null;
+    } else {
+      this.setIdleSpin(false);
     }
+    this._emitTimeline(this.animProgress);
     this._rebuildOverlay();
+  }
+
+  _emitTimeline(t) {
+    if (!this.onTimeline) return;
+    const pct = Math.round(Math.max(0, Math.min(1, t)) * 100);
+    if (pct === this._lastTimelineEmit) return;
+    this._lastTimelineEmit = pct;
+    this.onTimeline(pct / 100);
   }
 
   setSelected(node) {
@@ -592,12 +608,16 @@ export class Globe {
       group.userData.bridged = bridged;
 
       if (bridged) {
-        /* Skipped unmapped stages — dashed, readable against dark ocean */
-        const underGeo = new THREE.TubeGeometry(curve, 80, 0.0024, 5, false);
+        /*
+         * Skipped stages — thick segmented tubes (not 1px LineDashedMaterial)
+         * so orange/warm hops stay distinctive against the dark ocean.
+         */
+        const dashColor = color.clone().offsetHSL(0, 0.08, 0.14);
+        const underGeo = new THREE.TubeGeometry(curve, 80, 0.0036, 6, false);
         const underMat = new THREE.MeshBasicMaterial({
-          color,
+          color: dashColor,
           transparent: true,
-          opacity: 0.22,
+          opacity: 0.2,
           depthWrite: false,
         });
         const under = new THREE.Mesh(underGeo, underMat);
@@ -605,20 +625,34 @@ export class Globe {
         under.userData.fullIndexCount = underGeo.index ? underGeo.index.count : 0;
         group.add(under);
 
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        const dashMat = new THREE.LineDashedMaterial({
-          color,
+        const dashMat = new THREE.MeshBasicMaterial({
+          color: dashColor,
           transparent: true,
-          opacity: 0.82,
-          dashSize: 0.055,
-          gapSize: 0.028,
+          opacity: 0.95,
           depthWrite: false,
         });
-        const dash = new THREE.Line(lineGeo, dashMat);
-        dash.computeLineDistances();
-        dash.userData.role = "core";
-        dash.userData.fullIndexCount = pts.length;
-        group.add(dash);
+        const DASH = 0.07;
+        const GAP = 0.055;
+        const STEP = DASH + GAP;
+        let totalIndex = 0;
+        for (let u0 = 0; u0 < 0.999; u0 += STEP) {
+          const u1 = Math.min(1, u0 + DASH);
+          if (u1 - u0 < 0.012) break;
+          const segPts = [];
+          const segs = Math.max(4, Math.ceil((u1 - u0) * 48));
+          for (let s = 0; s <= segs; s++) {
+            segPts.push(curve.getPoint(u0 + ((u1 - u0) * s) / segs));
+          }
+          const segCurve = new THREE.CatmullRomCurve3(segPts);
+          const segGeo = new THREE.TubeGeometry(segCurve, segs, 0.0026, 5, false);
+          const mesh = new THREE.Mesh(segGeo, dashMat);
+          mesh.userData.role = "core";
+          mesh.userData.fullIndexCount = segGeo.index ? segGeo.index.count : 0;
+          totalIndex += mesh.userData.fullIndexCount;
+          group.add(mesh);
+        }
+        /* Keep a draw-range budget on the group for journey reveal */
+        group.userData.bridgedDashIndex = totalIndex;
       } else {
         const glowGeo = new THREE.TubeGeometry(curve, 80, uncertain ? 0.0032 : 0.004, 6, false);
         const glowMat = new THREE.MeshBasicMaterial({
@@ -676,24 +710,49 @@ export class Globe {
       g.userData.idx = i;
       g.userData.appearAt = nodes.length <= 1 ? 0 : i / (nodes.length - 1);
 
+      const conf = n.geoConfidence || "precise";
+      const uncertainPin =
+        conf === "uncertain" ||
+        conf === "approximate" ||
+        n.status === "reconstructed" ||
+        n.epistemic === "reconstructed";
+      const periodPin = conf === "period_only";
       const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(0.02, 12, 10),
+        new THREE.SphereGeometry(periodPin ? 0.016 : 0.02, 12, 10),
         new THREE.MeshBasicMaterial({
           color: hexColor(n.color),
           transparent: true,
-          opacity: 0.32,
+          opacity: periodPin ? 0.18 : uncertainPin ? 0.24 : 0.32,
           depthWrite: false,
         })
       );
       glow.userData.role = "markerGlow";
       const core = new THREE.Mesh(
-        new THREE.SphereGeometry(0.0095, 12, 10),
-        new THREE.MeshBasicMaterial({ color: hexColor(n.color) })
+        new THREE.SphereGeometry(periodPin ? 0.007 : 0.0095, 12, 10),
+        new THREE.MeshBasicMaterial({
+          color: hexColor(n.color),
+          transparent: periodPin || conf === "uncertain",
+          opacity: periodPin ? 0.55 : conf === "uncertain" ? 0.75 : 1,
+        })
       );
       core.userData.role = "markerCore";
       g.add(glow);
       g.add(core);
-      if (n.status === "reconstructed" || n.epistemic === "reconstructed") {
+      if (uncertainPin || periodPin) {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.012, 0.0155, 20),
+          new THREE.MeshBasicMaterial({
+            color: hexColor(n.color),
+            transparent: true,
+            opacity: 0.55,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+        );
+        ring.lookAt(0, 0, 0);
+        g.add(ring);
+      }
+      if (n.status === "reconstructed" || n.epistemic === "reconstructed" || conf === "uncertain") {
         const hole = new THREE.Mesh(
           new THREE.SphereGeometry(0.0038, 8, 8),
           new THREE.MeshBasicMaterial({ color: 0xfbf9f2 })
@@ -1118,9 +1177,11 @@ export class Globe {
       const u = (performance.now() - this._journeyStart) / this._journeyDuration;
       this.animProgress = Math.min(this._animTarget, Math.max(0, Math.min(1, u)));
       if (u >= 1) this._journeyDuration = 0;
+      this._emitTimeline(this.animProgress);
     } else {
       this.animProgress += (this._animTarget - this.animProgress) * 0.1;
       if (Math.abs(this._animTarget - this.animProgress) < 0.002) this.animProgress = this._animTarget;
+      if (!this._manualTimeline) this._emitTimeline(this.animProgress);
     }
 
     /* Camera rides each hop slowly: dwell → crawl → settle, then frame the region */
@@ -1180,8 +1241,8 @@ export class Globe {
           if (child.material) {
             const bridged = group.userData.bridged;
             const base =
-              role === "glow" ? (bridged ? 0.28 : 0.2) : bridged ? 0.85 : 0.92;
-            child.material.opacity = visible ? base * (0.45 + 0.55 * draw) : 0;
+              role === "glow" ? (bridged ? 0.22 : 0.2) : bridged ? 0.95 : 0.92;
+            child.material.opacity = visible ? base * (0.5 + 0.5 * draw) : 0;
           }
         }
         if (role === "pulse" && curve) {

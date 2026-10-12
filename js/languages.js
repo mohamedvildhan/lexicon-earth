@@ -1,277 +1,151 @@
-/** Language code → [name, lat, lon, startYear, endYear|null, note?]
- * Positions are language heartlands, not literal travel routes. */
-export const LG = {
-  en: ["English", 51.5, -0.12, 1500, null],
-  enm: ["Middle English", 52.5, -1.5, 1100, 1500],
-  ang: ["Old English", 51.2, -1.3, 450, 1150],
-  xno: ["Anglo-Norman", 49.2, -0.4, 1066, 1400],
-  fr: ["French", 48.85, 2.35, 1600, null],
-  frm: ["Middle French", 48.85, 2.35, 1350, 1600],
-  fro: ["Old French", 49, 2.5, 842, 1400],
-  la: ["Latin", 41.9, 12.5, -700, 600],
-  "la-lat": ["Late Latin", 41.9, 12.5, 200, 700],
-  "la-med": ["Medieval Latin", 47, 8, 700, 1500],
-  "la-new": ["New Latin", 47, 8, 1500, 1900],
-  "la-vul": ["Vulgar Latin", 41.9, 12.5, 0, 700],
-  "itc-pro": ["Proto-Italic", 42.5, 12.5, -1000, -700],
-  it: ["Italian", 43.8, 11.3, 1200, null],
-  "roa-oit": ["Old Italian", 43.8, 11.3, 900, 1400],
-  pro: ["Old Occitan", 43.6, 3.9, 1000, 1500],
-  oc: ["Occitan", 43.6, 3.9, 1500, null],
-  es: ["Spanish", 40.4, -3.7, 1200, null],
-  osp: ["Old Spanish", 39.9, -4, 900, 1500],
-  pt: ["Portuguese", 38.7, -9.14, 1200, null],
-  ca: ["Catalan", 41.4, 2.17, 1200, null],
-  ro: ["Romanian", 44.4, 26.1, 1500, null],
-  nl: ["Dutch", 52.4, 4.9, 1500, null],
-  dum: ["Middle Dutch", 51.2, 4.4, 1150, 1500],
-  de: ["German", 52.5, 13.4, 1500, null],
-  gmh: ["Middle High German", 49, 9, 1050, 1350],
-  goh: ["Old High German", 50, 9, 750, 1050],
-  non: ["Old Norse", 59.9, 10.7, 700, 1350],
-  sv: ["Swedish", 59.3, 18.07, 1500, null],
-  da: ["Danish", 55.7, 12.6, 1500, null],
-  is: ["Icelandic", 64.1, -21.9, 1300, null],
-  got: ["Gothic", 44, 28, 300, 500],
-  "gem-pro": ["Proto-Germanic", 54, 10, -500, 200, "Homeland is a reconstruction; position approximate."],
-  "gmw-pro": ["Proto-West Germanic", 53, 9, 0, 400, "Position approximate."],
-  "ine-pro": ["Proto-Indo-European", 48, 42, -4500, -2500, "Homeland debated; the Pontic–Caspian steppe is the leading hypothesis."],
-  grc: ["Ancient Greek", 37.98, 23.72, -800, 300],
-  gkm: ["Medieval Greek", 41, 28.98, 600, 1450],
-  el: ["Greek", 37.98, 23.72, 1450, null],
-  ar: ["Arabic", 27, 38, 600, null],
-  arc: ["Aramaic", 33.5, 36.3, -900, 700],
-  he: ["Hebrew", 31.77, 35.21, -1000, null],
-  akk: ["Akkadian", 32.54, 44.42, -2500, 100],
-  sux: ["Sumerian", 31.3, 45.6, -3100, -2000],
-  egy: ["Egyptian", 29.85, 31.25, -3200, -600],
-  cop: ["Coptic", 30, 31.2, 200, 1700],
-  phn: ["Phoenician", 33.9, 35.5, -1200, -300],
-  hit: ["Hittite", 40, 34.6, -1700, -1200],
-  xcl: ["Old Armenian", 40.18, 44.5, 400, 1100],
-  hy: ["Armenian", 40.18, 44.5, 1100, null],
-  peo: ["Old Persian", 29.93, 52.89, -600, -300],
-  ae: ["Avestan", 36, 62, -1500, -400],
-  pal: ["Middle Persian", 33.09, 44.58, 200, 700],
-  fa: ["Persian", 35.7, 51.4, 900, null],
-  "fa-cls": ["Classical Persian", 35.7, 51.4, 800, 1200],
-  "ira-pro": ["Proto-Iranian", 39, 65, -2000, -1000, "Position approximate."],
-  sa: ["Sanskrit", 27, 80, -1500, 500],
-  dra: ["Dravidian", 17, 79, -500, null, "Broad family label; position approximate."],
-  pi: ["Pali", 25.6, 85.1, -500, 500],
-  pra: ["Prakrit", 25.3, 82.9, -500, 500],
-  "pra-sa": ["Sauraseni Prakrit", 27.2, 78.0, -300, 500],
-  "inc-pro": ["Proto-Indo-Aryan", 30, 70, -2000, -1500, "Position approximate."],
-  evn: ["Evenki", 56.0, 124.0, 1600, null],
-  mnc: ["Manchu", 45.8, 126.5, 1600, 1900],
-  xng: ["Middle Mongol", 47.9, 106.9, 1200, 1500],
-  mn: ["Mongolian", 47.9, 106.9, 1500, null],
-  ug: ["Uyghur", 43.8, 87.6, 800, null],
-  "trk-oat": ["Old Turkic", 47.0, 90.0, 700, 1000],
-  hi: ["Hindi", 28.6, 77.2, 1000, null],
-  ur: ["Urdu", 28.6, 77.2, 1200, null],
-  bn: ["Bengali", 23.8, 90.4, 1000, null],
-  ta: ["Tamil", 13.08, 80.27, -300, null],
-  "dra-pro": ["Proto-Dravidian", 17, 79, -2500, -1000, "Position approximate."],
-  tr: ["Turkish", 39.9, 32.86, 1900, null],
-  ota: ["Ottoman Turkish", 41, 28.97, 1299, 1922],
-  ru: ["Russian", 55.75, 37.6, 1700, null],
-  orv: ["Old East Slavic", 50.45, 30.5, 900, 1400],
-  cu: ["Old Church Slavonic", 41.1, 20.8, 850, 1100],
-  "sla-pro": ["Proto-Slavic", 51, 27, 400, 1000, "Position approximate."],
-  pl: ["Polish", 52.2, 21, 1500, null],
-  zh: ["Chinese", 35, 113, -1000, null],
-  ja: ["Japanese", 35, 135.77, 700, null],
-  ko: ["Korean", 37.57, 126.98, 500, null],
-  vi: ["Vietnamese", 21.03, 105.85, 1000, null],
-  id: ["Indonesian", -6.2, 106.8, 1900, null],
-  ms: ["Malay", 3.14, 101.69, 1400, null],
-  tl: ["Tagalog", 14.6, 120.98, 1500, null],
-  haw: ["Hawaiian", 21.3, -157.86, 1000, null],
-  mi: ["Māori", -41.29, 174.78, 1200, null],
-  sw: ["Swahili", -6.16, 39.19, 1000, null],
-  am: ["Amharic", 9.03, 38.74, 1200, null],
-  so: ["Somali", 2.05, 45.3, 1800, null],
-  ha: ["Hausa", 12, 8.52, 1400, null],
-  yo: ["Yoruba", 7.4, 3.9, 1500, null],
-  wo: ["Wolof", 14.7, -17.4, 1500, null],
-  nci: ["Classical Nahuatl", 19.43, -99.13, 1300, 1700],
-  qu: ["Quechua", -13.53, -71.97, 1200, null],
-  arn: ["Mapudungun", -38.7, -72.6, 1500, null],
-  gn: ["Guaraní", -25.3, -57.6, 1500, null],
-  ht: ["Haitian Creole", 18.54, -72.34, 1700, null],
-  tpn: ["Tupinambá", -12.97, -38.5, 1500, 1700],
-  "cel-pro": ["Proto-Celtic", 47.5, 13.6, -1200, -500, "Position approximate."],
-  sga: ["Old Irish", 53.3, -6.26, 600, 900],
-  ga: ["Irish", 53.35, -6.26, 900, null],
-  cy: ["Welsh", 51.48, -3.18, 1100, null],
-  xtg: ["Gaulish", 46.5, 4.5, -500, 500],
-  lat: ["Latin", 41.9, 12.5, -700, 600],
-  ml: ["Malayalam", 10.0, 76.3, 800, null],
-  te: ["Telugu", 16.5, 80.6, 1000, null],
-  kn: ["Kannada", 12.97, 77.59, 900, null],
-  mr: ["Marathi", 18.52, 73.86, 1000, null],
-  pa: ["Punjabi", 31.55, 74.34, 1000, null],
-  gu: ["Gujarati", 23.03, 72.58, 1100, null],
-  ne: ["Nepali", 27.72, 85.32, 1200, null],
-  si: ["Sinhala", 6.93, 79.85, 800, null],
-  th: ["Thai", 13.76, 100.5, 1200, null],
-  my: ["Burmese", 19.75, 96.1, 1000, null],
-  km: ["Khmer", 11.55, 104.92, 600, null],
-  fi: ["Finnish", 60.17, 24.94, 1500, null],
-  et: ["Estonian", 59.44, 24.75, 1500, null],
-  hu: ["Hungarian", 47.5, 19.04, 1000, null],
-  sq: ["Albanian", 41.33, 19.82, 1400, null],
-  eu: ["Basque", 43.26, -2.92, -500, null],
-  ka: ["Georgian", 41.72, 44.79, 400, null],
-  yi: ["Yiddish", 52.23, 21.01, 1200, null],
-  af: ["Afrikaans", -33.92, 18.42, 1700, null],
-  "sem-pro": ["Proto-Semitic", 32, 40, -4000, -3000, "Homeland approximate."],
-  "trk-pro": ["Proto-Turkic", 48, 90, -500, 500, "Position approximate."],
-};
-
-export const AL = {
-  "LL.": "la-lat",
-  "ML.": "la-med",
-  "NL.": "la-new",
-  "VL.": "la-vul",
-};
-
 /**
- * Origin nation / civilization / homeland for globe labels.
- * Prefer historical names when the language is ancient.
+ * Language heartlands for Lexicon Earth.
+ * Atlas built by scripts/build-language-atlas.mjs (Wiktionary + Glottolog + overrides).
+ * Positions are language heartlands / centroids — not literal travel routes.
  */
-export const REGION = {
-  en: "England",
-  enm: "England",
-  ang: "England",
-  xno: "Normandy",
-  fr: "France",
-  frm: "France",
-  fro: "France",
-  la: "Rome",
-  lat: "Rome",
-  "la-lat": "Rome",
-  "la-med": "Medieval Europe",
-  "la-new": "Europe",
-  "la-vul": "Roman Italy",
-  "itc-pro": "Italy",
-  it: "Italy",
-  "roa-oit": "Italy",
-  pro: "Occitania",
-  oc: "Occitania",
-  es: "Spain",
-  osp: "Spain",
-  pt: "Portugal",
-  ca: "Catalonia",
-  ro: "Romania",
-  nl: "Netherlands",
-  dum: "Low Countries",
-  de: "Germany",
-  gmh: "Germany",
-  goh: "Germany",
-  non: "Scandinavia",
-  sv: "Sweden",
-  da: "Denmark",
-  is: "Iceland",
-  got: "Dacia",
-  "gem-pro": "Germania",
-  "gmw-pro": "Germania",
-  "ine-pro": "Pontic steppe",
-  grc: "Greece",
-  gkm: "Byzantium",
-  el: "Greece",
-  ar: "Arabia",
-  arc: "Aram",
-  he: "Israel",
-  akk: "Akkad",
-  sux: "Sumer",
-  egy: "Egypt",
-  cop: "Egypt",
-  phn: "Phoenicia",
-  hit: "Hatti",
-  xcl: "Armenia",
-  hy: "Armenia",
-  peo: "Persia",
-  ae: "Iran",
-  pal: "Persia",
-  fa: "Persia",
-  "fa-cls": "Persia",
-  "ira-pro": "Iran",
-  sa: "India",
-  dra: "India",
-  pi: "India",
-  pra: "India",
-  "pra-sa": "India",
-  "inc-pro": "India",
-  hi: "India",
-  ur: "India",
-  bn: "Bengal",
-  ta: "Tamilakam",
-  "dra-pro": "India",
-  evn: "Siberia",
-  mnc: "Manchuria",
-  xng: "Mongolia",
-  mn: "Mongolia",
-  ug: "Xinjiang",
-  "trk-oat": "Central Asia",
-  tr: "Turkey",
-  ota: "Ottoman Empire",
-  ru: "Russia",
-  orv: "Kievan Rus'",
-  cu: "Bulgaria",
-  "sla-pro": "Slavia",
-  pl: "Poland",
-  zh: "China",
-  ja: "Japan",
-  ko: "Korea",
-  vi: "Vietnam",
-  id: "Indonesia",
-  ms: "Malaya",
-  tl: "Philippines",
-  haw: "Hawaiʻi",
-  mi: "Aotearoa",
-  sw: "Swahili Coast",
-  am: "Ethiopia",
-  so: "Somalia",
-  ha: "Hausaland",
-  yo: "Yorubaland",
-  wo: "Senegal",
-  nci: "Mexica",
-  qu: "Andes",
-  arn: "Mapuche",
-  gn: "Paraguay",
-  ht: "Haiti",
-  tpn: "Brazil",
-  "cel-pro": "Gaul",
-  sga: "Ireland",
-  ga: "Ireland",
-  cy: "Wales",
-  xtg: "Gaul",
-  ml: "Kerala",
-  te: "Andhra",
-  kn: "Karnataka",
-  mr: "Maharashtra",
-  pa: "Punjab",
-  gu: "Gujarat",
-  ne: "Nepal",
-  si: "Sri Lanka",
-  th: "Thailand",
-  my: "Myanmar",
-  km: "Khmer Empire",
-  fi: "Finland",
-  et: "Estonia",
-  hu: "Hungary",
-  sq: "Albania",
-  eu: "Basque Country",
-  ka: "Georgia",
-  yi: "Ashkenaz",
-  af: "South Africa",
-  "sem-pro": "Near East",
-  "trk-pro": "Central Asia",
-};
+
+const atlasUrl = new URL("../data/languages-atlas.json", import.meta.url);
+
+async function loadAtlas() {
+  try {
+    const r = await fetch(atlasUrl);
+    if (r.ok) return r.json();
+  } catch {
+    /* Node may reject file: fetch — fall through */
+  }
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  return JSON.parse(readFileSync(fileURLToPath(atlasUrl), "utf8"));
+}
+
+const atlas = await loadAtlas();
+
+export const ATLAS_META = atlas.meta || {};
+export const AL = Object.freeze({ ...(atlas.aliases || {}) });
+
+/** @deprecated Prefer lookupLanguage — kept as a compact array view for legacy callers */
+export const LG = (() => {
+  const out = {};
+  for (const [code, e] of Object.entries(atlas.languages || {})) {
+    if (e.lat == null || e.lon == null) continue;
+    out[code] = [e.name, e.lat, e.lon, e.yearStart ?? null, e.yearEnd ?? null, e.note || ""];
+  }
+  return out;
+})();
+
+export const REGION = (() => {
+  const out = {};
+  for (const [code, e] of Object.entries(atlas.languages || {})) {
+    if (e.region) out[code] = e.region;
+  }
+  return out;
+})();
+
+export const GEO_CONFIDENCE = Object.freeze({
+  precise: "precise",
+  approximate: "approximate",
+  uncertain: "uncertain",
+  period_only: "period_only",
+  unavailable: "unavailable",
+});
+
+export const GEO_DISCLAIMER = Object.freeze({
+  precise: "",
+  approximate: "Position approximate (family/region centroid).",
+  uncertain: "Reconstructed homeland — scholarly estimate, debated.",
+  period_only: "Shown at the parent language’s region; period, not a distinct place.",
+  unavailable: "No mapped location for this stage.",
+  ...(atlas.meta?.disclaimers || {}),
+});
 
 export const PAL = ["#b54b3d", "#c98548", "#6d8d79", "#678ba0", "#354e69"];
+
+/** Resolve code through aliases. */
+export function resolveCode(code) {
+  if (!code) return "";
+  return AL[code] || code;
+}
+
+const NAME_TO_CODE = (() => {
+  const m = new Map();
+  for (const [code, e] of Object.entries(atlas.languages || {})) {
+    if (e?.name) m.set(String(e.name).toLowerCase(), code);
+  }
+  /* Common Wiktionary L2 labels that may differ slightly */
+  const extra = {
+    english: "en",
+    italian: "it",
+    french: "fr",
+    german: "de",
+    spanish: "es",
+    portuguese: "pt",
+    latin: "la",
+    dutch: "nl",
+    russian: "ru",
+    arabic: "ar",
+    persian: "fa",
+    greek: "el",
+    "ancient greek": "grc",
+    chinese: "zh",
+    japanese: "ja",
+    sanskrit: "sa",
+    "middle english": "enm",
+    "old english": "ang",
+    "old french": "fro",
+    "middle french": "frm",
+    "old italian": "roa-oit",
+  };
+  for (const [k, v] of Object.entries(extra)) {
+    if (!m.has(k)) m.set(k, v);
+  }
+  return m;
+})();
+
+/** Resolve a Wiktionary L2 language heading (e.g. "Italian") to an atlas entry. */
+export function lookupLanguageByName(name) {
+  const key = String(name || "")
+    .toLowerCase()
+    .trim();
+  if (!key) return lookupLanguage("");
+  const code = NAME_TO_CODE.get(key);
+  if (code) return lookupLanguage(code);
+  return lookupLanguage(key);
+}
+
+/** Full atlas entry for a language / etymology-language code. */
+export function lookupLanguage(code) {
+  const c = resolveCode(code);
+  const e = atlas.languages?.[c];
+  if (!e) {
+    return {
+      code: c,
+      name: c,
+      lat: null,
+      lon: null,
+      yearStart: null,
+      yearEnd: null,
+      region: "",
+      note: GEO_DISCLAIMER.unavailable,
+      geoConfidence: GEO_CONFIDENCE.unavailable,
+      source: "unknown",
+    };
+  }
+  const conf = e.geoConfidence || (e.lat != null ? GEO_CONFIDENCE.precise : GEO_CONFIDENCE.unavailable);
+  return {
+    code: c,
+    name: e.name || c,
+    lat: e.lat ?? null,
+    lon: e.lon ?? null,
+    yearStart: e.yearStart ?? null,
+    yearEnd: e.yearEnd ?? null,
+    region: e.region || "",
+    note: e.note || GEO_DISCLAIMER[conf] || "",
+    geoConfidence: conf,
+    source: e.source || "",
+    parent: e.parent || null,
+    glottocode: e.glottocode || null,
+  };
+}
 
 export function yearLabel(y) {
   return y < 0 ? `${-y} BCE` : `${y} CE`;
@@ -285,7 +159,9 @@ export function period(a, b) {
 
 /** Resolve origin nation / civilization for a language code. */
 export function regionOf(code) {
-  if (!code) return "";
-  const c = AL[code] || code;
-  return REGION[c] || "";
+  return lookupLanguage(code).region || "";
+}
+
+export function atlasStats() {
+  return ATLAS_META.stats || { total: 0, withCoords: 0, byConfidence: {} };
 }

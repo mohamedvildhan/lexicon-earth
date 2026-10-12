@@ -1,5 +1,5 @@
 /* Lexicon Earth service worker — offline shell + GeoJSON + CDN runtime cache */
-const CACHE_VERSION = "lx-v8";
+const CACHE_VERSION = "lx-v30";
 const SHELL = "lx-shell-" + CACHE_VERSION;
 const RUNTIME = "lx-runtime-" + CACHE_VERSION;
 
@@ -17,6 +17,8 @@ const PRECACHE = [
   "./manifest.webmanifest",
   "./favicon.svg",
   "./data/starter.json",
+  "./data/languages-atlas.json",
+  "./data/ATTRIBUTION-languages.md",
   "./assets/earth/ne_50m_land.geojson",
   "./assets/earth/ne_50m_coastline.geojson",
   "./assets/earth/ATTRIBUTION.md",

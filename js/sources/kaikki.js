@@ -1,6 +1,6 @@
 import { SourceAdapter } from "./base.js";
 import { makeCitation, makeNode, makeEdge, REL_TYPES, EPISTEMIC, GEO_BASIS } from "../model.js";
-import { LG, AL, regionOf } from "../languages.js";
+import { lookupLanguage, GEO_CONFIDENCE } from "../languages.js";
 
 const ANC = /^(inh|inherited|bor|borrowed|der|derived|lbor|bor\+|inh\+|der\+|calque|cal|etyl)$/;
 
@@ -70,27 +70,28 @@ export class KaikkiAdapter extends SourceAdapter {
     const edges = [];
     let prev = null;
     for (const a of [...anc].reverse()) {
-      const c = AL[a.code] || a.code;
-      const L = LG[c];
-      const pro = /-pro$/.test(c);
+      const L = lookupLanguage(a.code);
+      const pro = /-pro$/.test(L.code);
       let form = a.term || "—";
       if (pro && form !== "—" && form[0] !== "*") form = "*" + form;
+      const mapped = L.lat != null;
       const node = makeNode({
         form,
-        language: L ? L[0] : c,
-        languageCode: c,
-        region: regionOf(c),
+        language: L.name,
+        languageCode: L.code,
+        region: L.region || "",
         gloss: a.gloss,
         transliteration: a.tr,
-        yearStart: L ? L[3] : null,
-        yearEnd: L ? L[4] : null,
-        lat: L ? L[1] : null,
-        lon: L ? L[2] : null,
-        geoBasis: L ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+        yearStart: L.yearStart,
+        yearEnd: L.yearEnd,
+        lat: L.lat,
+        lon: L.lon,
+        geoBasis: mapped ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+        geoConfidence: L.geoConfidence || (mapped ? GEO_CONFIDENCE.precise : GEO_CONFIDENCE.unavailable),
         epistemic: pro ? EPISTEMIC.reconstructed : EPISTEMIC.attested,
-        note: L
-          ? (L[5] || "") + " Inferred geographic association from language range."
-          : "Language region not mapped.",
+        note: mapped
+          ? L.note || ""
+          : L.note || "Language region not mapped.",
         citationIds,
       });
       nodes.push(node);
@@ -110,18 +111,19 @@ export class KaikkiAdapter extends SourceAdapter {
       prev = node;
     }
 
-    const E = LG.en;
+    const E = lookupLanguage("en");
     const head = makeNode({
       form: entry.word,
       language: "English",
       languageCode: "en",
-      region: regionOf("en"),
-      yearStart: E[3],
-      lat: E[1],
-      lon: E[2],
+      region: E.region || "England",
+      yearStart: E.yearStart,
+      lat: E.lat,
+      lon: E.lon,
       geoBasis: GEO_BASIS.language_heartland,
+      geoConfidence: E.geoConfidence || GEO_CONFIDENCE.precise,
       epistemic: EPISTEMIC.attested,
-      note: "Inferred geographic association from language range.",
+      note: "",
       citationIds,
     });
     nodes.push(head);

@@ -3,11 +3,12 @@ import {
   makeCitation,
   makeNode,
   makeEdge,
+  cleanForm,
   REL_TYPES,
   EPISTEMIC,
   GEO_BASIS,
 } from "../model.js";
-import { LG, AL, period, regionOf } from "../languages.js";
+import { lookupLanguage, lookupLanguageByName, period, GEO_CONFIDENCE } from "../languages.js";
 
 const API = "https://en.wiktionary.org/w/api.php";
 const REST = "https://en.wiktionary.org/api/rest_v1/page/definition/";
@@ -127,32 +128,20 @@ function parseEty(wt) {
 }
 
 function geoFor(code) {
-  const c = AL[code] || code;
-  const L = LG[c];
-  if (!L) {
-    return {
-      language: c,
-      languageCode: c,
-      region: "",
-      lat: null,
-      lon: null,
-      era: "",
-      y: null,
-      note: "Language region not mapped.",
-      geoBasis: GEO_BASIS.none,
-    };
-  }
+  const L = lookupLanguage(code);
+  const mapped = L.lat != null && L.lon != null;
   return {
-    language: L[0],
-    languageCode: c,
-    region: regionOf(c),
-    lat: L[1],
-    lon: L[2],
-    era: period(L[3], L[4]),
-    y: L[3],
-    yearEnd: L[4],
-    note: L[5] || "",
-    geoBasis: GEO_BASIS.language_heartland,
+    language: L.name,
+    languageCode: L.code,
+    region: L.region || "",
+    lat: L.lat,
+    lon: L.lon,
+    era: period(L.yearStart, L.yearEnd),
+    y: L.yearStart,
+    yearEnd: L.yearEnd,
+    note: L.note || (mapped ? "" : "Language region not mapped."),
+    geoBasis: mapped ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+    geoConfidence: L.geoConfidence || (mapped ? GEO_CONFIDENCE.precise : GEO_CONFIDENCE.unavailable),
   };
 }
 
@@ -160,10 +149,21 @@ function htmlToText(html) {
   return new DOMParser().parseFromString(html || "", "text/html").body.textContent.trim();
 }
 
-async function fetchDefinition(title, { signal } = {}) {
+function restGroupsForLang(data, langCode) {
+  if (!data || typeof data !== "object") return [];
+  if (langCode && Array.isArray(data[langCode])) return data[langCode];
+  if (Array.isArray(data.en)) return data.en;
+  /* Fall back to first language bucket on the page */
+  for (const v of Object.values(data)) {
+    if (Array.isArray(v) && v.length) return v;
+  }
+  return [];
+}
+
+async function fetchDefinition(title, { signal, langCode = "en" } = {}) {
   try {
     const d = await js(REST + encodeURIComponent(title), { signal });
-    for (const g of d.en || []) {
+    for (const g of restGroupsForLang(d, langCode)) {
       for (const item of g.definitions || []) {
         const t = htmlToText(item.definition);
         if (t) return `${(g.partOfSpeech || "").toLowerCase()} — ${t}`;
@@ -175,12 +175,50 @@ async function fetchDefinition(title, { signal } = {}) {
   return "";
 }
 
-/** All English REST senses (POS + gloss), ordered as Wiktionary returns them. */
-async function fetchDefinitionList(title, { signal } = {}) {
+/** Prefer the chosen sense’s POS + gloss over the page’s first definition. */
+function definitionFromCandidate(candidate) {
+  const pos = String(candidate?.pos || "")
+    .toLowerCase()
+    .trim();
+  let gloss = String(candidate?.gloss || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!gloss) return "";
+  if (/^wikidata\b/i.test(gloss)) return pos ? `${pos} — lexical entry (Wikidata)` : "";
+  if (/^(no dedicated etymology|english\b)/i.test(gloss) && gloss.length < 48) return "";
+  if (gloss.length > 320) gloss = gloss.slice(0, 317) + "…";
+  return pos ? `${pos} — ${gloss}` : gloss;
+}
+
+/** Match REST definition list to a candidate POS / etymology index when possible. */
+async function fetchDefinitionForCandidate(title, candidate, { signal, langCode = "en" } = {}) {
+  const fromCand = definitionFromCandidate(candidate);
+  if (fromCand) return fromCand;
+  try {
+    const list = await fetchDefinitionList(title, { signal, langCode });
+    if (!list.length) return fetchDefinition(title, { signal, langCode });
+    const wantPos = String(candidate?.pos || "").toLowerCase();
+    const ety = candidate?.meta?.etyIndex;
+    const pool = wantPos
+      ? list.filter((d) => String(d.pos || "").toLowerCase() === wantPos)
+      : list;
+    const hit =
+      (typeof ety === "number" && (pool[ety] || list[ety])) || pool[0] || list[0];
+    if (!hit?.gloss) return "";
+    const pos = String(hit.pos || wantPos || "").toLowerCase();
+    return pos ? `${pos} — ${hit.gloss}` : hit.gloss;
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+  }
+  return fetchDefinition(title, { signal, langCode });
+}
+
+/** REST senses for a language (falls back to any available language on the page). */
+async function fetchDefinitionList(title, { signal, langCode = "en" } = {}) {
   try {
     const d = await js(REST + encodeURIComponent(title), { signal });
     const out = [];
-    for (const g of d.en || []) {
+    for (const g of restGroupsForLang(d, langCode)) {
       const pos = g.partOfSpeech || "";
       for (const item of g.definitions || []) {
         const t = htmlToText(item.definition);
@@ -213,35 +251,54 @@ function sensePreviewFromSlice(slice) {
   return { pos, gloss };
 }
 
+/** L2 language headings on a Wiktionary page (English preferred first). */
+function listL2Languages(sections) {
+  const names = (sections || [])
+    .filter((x) => x.toclevel === 1 && x.line && !/^(Translingual|References|Further reading)$/i.test(x.line))
+    .map((x) => x.line);
+  const uniq = [...new Set(names)];
+  uniq.sort((a, b) => {
+    if (a === "English") return -1;
+    if (b === "English") return 1;
+    return a.localeCompare(b);
+  });
+  return uniq;
+}
+
 /**
- * Slice English L2 sections and Etymology subsections from full-page wikitext.
- * @returns {{ title: string, ets: Array<{ line: string, wikitext: string, sectionIndex: number|null }> } | null}
+ * Slice L2 language section + Etymology subsections from full-page wikitext.
+ * @returns {{ language: string, ets: Array<{ line, wikitext, sectionIndex, pos?, gloss? }> } | null}
  */
-function extractEnglishEtymologies(fullWt, sections) {
-  if (!fullWt) return null;
-  const enMatch = fullWt.match(/^==\s*English\s*==\s*$/m);
-  if (!enMatch) return null;
-  const enStart = enMatch.index + enMatch[0].length;
-  const nextL2 = fullWt.slice(enStart).search(/^==\s*[^=].*?==\s*$/m);
-  const enBody = nextL2 >= 0 ? fullWt.slice(enStart, enStart + nextL2) : fullWt.slice(enStart);
+function extractLanguageEtymologies(fullWt, sections, languageName) {
+  if (!fullWt || !languageName) return null;
+  const esc = languageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const langRe = new RegExp(`^==\\s*${esc}\\s*==\\s*$`, "m");
+  const langMatch = fullWt.match(langRe);
+  if (!langMatch) return null;
+  const langStart = langMatch.index + langMatch[0].length;
+  const nextL2 = fullWt.slice(langStart).search(/^==\s*[^=].*?==\s*$/m);
+  const langBody = nextL2 >= 0 ? fullWt.slice(langStart, langStart + nextL2) : fullWt.slice(langStart);
 
   const etyRe = /^(={3,4})\s*(Etymology(?:\s+\d+)?)\s*\1\s*$/gm;
   const hits = [];
   let m;
-  while ((m = etyRe.exec(enBody))) {
+  while ((m = etyRe.exec(langBody))) {
     hits.push({ line: m[2], index: m.index, end: m.index + m[0].length });
   }
 
-  const enSec = (sections || []).find((x) => x.line === "English" && x.toclevel === 1);
-  const etySecs = enSec
-    ? (sections || []).filter((x) => /^Etymology( \d+)?$/.test(x.line) && String(x.number).startsWith(enSec.number + "."))
+  const langSec = (sections || []).find((x) => x.line === languageName && x.toclevel === 1);
+  const etySecs = langSec
+    ? (sections || []).filter(
+        (x) => /^Etymology( \d+)?$/.test(x.line) && String(x.number).startsWith(langSec.number + ".")
+      )
     : [];
 
   if (!hits.length) {
     return {
+      language: languageName,
       ets: [
         {
-          line: "English entry",
+          line: `${languageName} entry`,
           wikitext: "",
           sectionIndex: null,
         },
@@ -250,11 +307,11 @@ function extractEnglishEtymologies(fullWt, sections) {
   }
 
   return {
+    language: languageName,
     ets: hits.map((h, i) => {
       const next = hits[i + 1];
-      const sliceEnd = next ? next.index : enBody.length;
-      const full = enBody.slice(h.end, sliceEnd).replace(/^\s+/, "");
-      /* Etymology templates only — stop before POS / usage headings */
+      const sliceEnd = next ? next.index : langBody.length;
+      const full = langBody.slice(h.end, sliceEnd).replace(/^\s+/, "");
       const body = full.split(/\n={3,5}[^=]/)[0];
       const preview = sensePreviewFromSlice(full);
       const sec = etySecs[i];
@@ -269,7 +326,12 @@ function extractEnglishEtymologies(fullWt, sections) {
   };
 }
 
-function buildGraph(title, pe, citation) {
+/** @deprecated Use extractLanguageEtymologies(…, "English") */
+function extractEnglishEtymologies(fullWt, sections) {
+  return extractLanguageEtymologies(fullWt, sections, "English");
+}
+
+function buildGraph(title, pe, citation, headLanguage = "English", headLanguageCode = "en") {
   const nodes = [];
   const edges = [];
   const citationIds = [citation.id];
@@ -279,7 +341,7 @@ function buildGraph(title, pe, citation) {
 
   for (const a of anc) {
     const g = geoFor(a.code);
-    const rawTerm = (a.alt || a.term || "").replace(/#[^\s]*/g, "").replace(/_/g, " ").trim();
+    const rawTerm = cleanForm(a.alt || a.term || "");
     const unrecorded = !rawTerm || rawTerm === "-" || rawTerm === "—";
     const pro = !unrecorded && (/-pro$/.test(g.languageCode) || /^\*/.test(rawTerm));
     let form = unrecorded ? "—" : rawTerm;
@@ -291,6 +353,7 @@ function buildGraph(title, pe, citation) {
         : pro
           ? EPISTEMIC.reconstructed
           : EPISTEMIC.attested;
+    const geoNote = g.note && g.geoConfidence && g.geoConfidence !== "precise" ? g.note : "";
     const node = makeNode({
       form,
       language: g.language,
@@ -303,8 +366,9 @@ function buildGraph(title, pe, citation) {
       lat: g.lat,
       lon: g.lon,
       geoBasis: g.lat != null ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+      geoConfidence: g.geoConfidence || GEO_CONFIDENCE.unavailable,
       epistemic,
-      note: a.dis ? "Hedged wording in Wiktionary extraction." : "",
+      note: [a.dis ? "Hedged wording in Wiktionary extraction." : "", geoNote].filter(Boolean).join(" "),
       citationIds,
     });
     nodes.push(node);
@@ -324,18 +388,19 @@ function buildGraph(title, pe, citation) {
     prevId = node.id;
   }
 
-  const en = geoFor("en");
+  const headGeo = geoFor(headLanguageCode);
   const head = makeNode({
     form: title,
-    language: "English",
-    languageCode: "en",
-    region: en.region || "England",
-    yearStart: en.y,
-    lat: en.lat,
-    lon: en.lon,
-    geoBasis: GEO_BASIS.language_heartland,
+    language: headLanguage || headGeo.language || "English",
+    languageCode: headLanguageCode || headGeo.languageCode || "en",
+    region: headGeo.region || "",
+    yearStart: headGeo.y,
+    lat: headGeo.lat,
+    lon: headGeo.lon,
+    geoBasis: headGeo.lat != null ? GEO_BASIS.language_heartland : GEO_BASIS.none,
+    geoConfidence: headGeo.geoConfidence || GEO_CONFIDENCE.precise,
     epistemic: EPISTEMIC.attested,
-    note: "",
+    note: headGeo.geoConfidence && headGeo.geoConfidence !== "precise" ? headGeo.note || "" : "",
     citationIds,
   });
   nodes.push(head);
@@ -394,7 +459,8 @@ export class WiktionaryAdapter extends SourceAdapter {
           `${API}?action=parse&page=${encodeURIComponent(t)}&prop=wikitext|sections&format=json&formatversion=2&redirects=1&origin=*`,
           { signal }
         );
-        if (d.parse?.sections?.some((x) => x.line === "English" && x.toclevel === 1)) {
+        const l2 = listL2Languages(d.parse?.sections || []);
+        if (d.parse?.title && l2.length) {
           title = d.parse.title;
           fullWt = typeof d.parse.wikitext === "string" ? d.parse.wikitext : d.parse.wikitext?.["*"] || "";
           secs = d.parse.sections;
@@ -416,7 +482,6 @@ export class WiktionaryAdapter extends SourceAdapter {
         for (const s of sugg) {
           const key = String(s).toLowerCase();
           if (!key || seen.has(key)) continue;
-          /* Skip the failed query itself — same spelling won't resolve */
           if (key === qLower) continue;
           seen.add(key);
           useful.push(s);
@@ -425,8 +490,8 @@ export class WiktionaryAdapter extends SourceAdapter {
         return useful.map((s) => ({
           id: `wikt:suggest:${s}`,
           lemma: s,
-          language: "English",
-          languageCode: "en",
+          language: "any",
+          languageCode: "",
           sense: "suggestion",
           gloss: "Suggested spelling from Wiktionary open search",
           sourceId: this.id,
@@ -438,68 +503,75 @@ export class WiktionaryAdapter extends SourceAdapter {
       }
     }
 
-    const extracted = extractEnglishEtymologies(fullWt, secs);
-    const ets = extracted?.ets || [];
+    const languages = listL2Languages(secs);
+    for (const langName of languages) {
+      const extracted = extractLanguageEtymologies(fullWt, secs, langName);
+      if (!extracted) continue;
+      const langInfo = lookupLanguageByName(langName);
+      const langCode = langInfo.code && langInfo.name !== langInfo.code ? langInfo.code : langName.slice(0, 3).toLowerCase();
+      const ets = extracted.ets || [];
+      let restDefs = null;
 
-    if (!ets.length || (ets.length === 1 && !ets[0].wikitext && ets[0].line === "English entry")) {
-      const defs = await fetchDefinitionList(title, { signal });
-      const top = defs[0];
-      out.push({
-        id: `wikt:${title}:0`,
-        lemma: title,
-        language: "English",
-        languageCode: "en",
-        sense: "English entry",
-        pos: top?.pos || "",
-        gloss: top ? top.gloss : "No dedicated etymology section",
-        sourceId: this.id,
-        meta: { title, etyIndex: 0, sectionIndex: null, wikitext: "" },
-      });
-      return out;
-    }
+      const pushCand = (sec, i, pos, gloss) => {
+        out.push({
+          id: `wikt:${title}:${langCode}:${i}`,
+          lemma: title,
+          language: langName,
+          languageCode: langCode,
+          sense: sec.line,
+          pos: pos || "",
+          gloss: gloss || (ets.length > 1 ? `${langName} · ${sec.line}` : `${langName} entry`),
+          sourceId: this.id,
+          meta: {
+            title,
+            language: langName,
+            languageCode: langCode,
+            etyIndex: i,
+            sectionIndex: sec.sectionIndex,
+            wikitext: sec.wikitext || "",
+          },
+        });
+      };
 
-    /* Fill missing previews from REST when wikitext has no POS block yet (common for Ety 1) */
-    let restDefs = null;
-    const needRest = ets.some((sec) => !sec.gloss);
-    if (needRest) restDefs = await fetchDefinitionList(title, { signal });
+      if (!ets.length || (ets.length === 1 && !ets[0].wikitext && /entry$/i.test(ets[0].line))) {
+        restDefs = await fetchDefinitionList(title, { signal, langCode });
+        const top = restDefs[0];
+        pushCand(
+          ets[0] || { line: `${langName} entry`, wikitext: "", sectionIndex: null },
+          0,
+          top?.pos || "",
+          top ? top.gloss : "No dedicated etymology section"
+        );
+        continue;
+      }
 
-    ets.forEach((sec, i) => {
-      let pos = sec.pos || "";
-      let gloss = sec.gloss || "";
-      if (!gloss && restDefs?.length) {
-        /* Heuristic: map etymology n → nth distinct POS group’s first gloss */
-        const byPos = [];
-        let lastPos = null;
-        for (const d of restDefs) {
-          if (d.pos !== lastPos) {
-            byPos.push(d);
-            lastPos = d.pos;
+      if (ets.some((sec) => !sec.gloss)) {
+        restDefs = await fetchDefinitionList(title, { signal, langCode });
+      }
+
+      ets.forEach((sec, i) => {
+        let pos = sec.pos || "";
+        let gloss = sec.gloss || "";
+        if (!gloss && restDefs?.length) {
+          const byPos = [];
+          let lastPos = null;
+          for (const d of restDefs) {
+            if (d.pos !== lastPos) {
+              byPos.push(d);
+              lastPos = d.pos;
+            }
+          }
+          const hit = byPos[i] || restDefs[i] || restDefs[0];
+          if (hit) {
+            pos = pos || hit.pos || "";
+            gloss = hit.gloss;
           }
         }
-        const hit = byPos[i] || restDefs[i] || restDefs[0];
-        if (hit) {
-          pos = pos || hit.pos || "";
-          gloss = hit.gloss;
-        }
-      }
-      if (gloss.length > 140) gloss = gloss.slice(0, 137) + "…";
-      out.push({
-        id: `wikt:${title}:${i}`,
-        lemma: title,
-        language: "English",
-        languageCode: "en",
-        sense: sec.line,
-        pos,
-        gloss: gloss || (ets.length > 1 ? sec.line : "English entry"),
-        sourceId: this.id,
-        meta: {
-          title,
-          etyIndex: i,
-          sectionIndex: sec.sectionIndex,
-          wikitext: sec.wikitext || "",
-        },
+        if (gloss.length > 140) gloss = gloss.slice(0, 137) + "…";
+        pushCand(sec, i, pos, gloss);
       });
-    });
+    }
+
     return out;
   }
 
@@ -508,10 +580,12 @@ export class WiktionaryAdapter extends SourceAdapter {
     const { signal } = opts;
     const title = candidate.meta?.title || candidate.lemma;
     const sectionIndex = candidate.meta?.sectionIndex;
+    const headLanguage = candidate.meta?.language || candidate.language || "English";
+    const headLanguageCode = candidate.meta?.languageCode || candidate.languageCode || "en";
 
     const citation = makeCitation({
-      title: `Wiktionary: ${title}`,
-      url: `https://en.wiktionary.org/wiki/${encodeURIComponent(title)}`,
+      title: `Wiktionary: ${title} (${headLanguage})`,
+      url: `https://en.wiktionary.org/wiki/${encodeURIComponent(title)}#${encodeURIComponent(headLanguage)}`,
       dataset: "English Wiktionary (MediaWiki API)",
       entry: title,
       license: "CC BY-SA 4.0",
@@ -519,12 +593,14 @@ export class WiktionaryAdapter extends SourceAdapter {
       transform: "Etymology templates parsed from wikitext; geographic associations inferred from language heartlands.",
     });
 
-    const defP = fetchDefinition(title, { signal });
+    const defP = fetchDefinitionForCandidate(title, candidate, {
+      signal,
+      langCode: headLanguageCode,
+    });
     let pe = { anc: [], formed: null, unknown: true, extractedText: "" };
 
     let wt = candidate.meta?.wikitext;
     if (wt == null || wt === "") {
-      /* Fallback: section fetch when wikitext was not stashed (e.g. older cache path) */
       if (sectionIndex != null) {
         const d = await js(
           `${API}?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&section=${sectionIndex}&format=json&formatversion=2&origin=*`,
@@ -536,7 +612,7 @@ export class WiktionaryAdapter extends SourceAdapter {
     }
     if (wt) pe = parseEty(wt);
 
-    const { nodes, edges, gaps } = buildGraph(title, pe, citation);
+    const { nodes, edges, gaps } = buildGraph(title, pe, citation, headLanguage, headLanguageCode);
     const definition = await defP;
 
     return {
@@ -547,9 +623,10 @@ export class WiktionaryAdapter extends SourceAdapter {
       gaps,
       alternatives: [],
       word: title,
-      language: "English",
-      languageCode: "en",
+      language: headLanguage,
+      languageCode: headLanguageCode,
       sense: candidate.sense || "",
+      pos: candidate.pos || "",
     };
   }
 }
