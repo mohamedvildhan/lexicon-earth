@@ -427,21 +427,61 @@ async function enrichTransliterations(nodes, { signal, pageWt = "" } = {}) {
           return `{{xlit|${code}|${term}}}`;
         })
         .join(sep);
-      const d = await js(
-        `${API}?action=expandtemplates&text=${encodeURIComponent(text)}&prop=wikitext&format=json&formatversion=2&origin=*`,
-        { signal }
-      );
-      const parts = String(d.expandtemplates?.wikitext || "").split(sep);
-      still.forEach((n, i) => {
-        const term = cleanForm(n.form).replace(/^\*/, "");
-        const code = String(n.languageCode || "")
-          .split(/[-_/]/)[0]
-          .toLowerCase();
-        const tr = stripXlit(parts[i] || "");
-        if (!tr || tr === term || /\{\{|Module:|script error/i.test(tr)) return;
-        n.transliteration = tr;
-        xlitCache.set(`${code}|${term}`, tr);
-      });
+      /* Prefer expandtemplates; fall back to parse if the API shape differs */
+      let raw = "";
+      try {
+        const d = await js(
+          `${API}?action=expandtemplates&text=${encodeURIComponent(text)}&prop=wikitext&format=json&formatversion=2&origin=*`,
+          { signal }
+        );
+        raw = String(d.expandtemplates?.wikitext || "");
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+      }
+      if (!raw) {
+        const d = await js(
+          `${API}?action=parse&text=${encodeURIComponent(text)}&contentmodel=wikitext&prop=text&format=json&formatversion=2&origin=*`,
+          { signal }
+        );
+        const html = typeof d.parse?.text === "string" ? d.parse.text : d.parse?.text?.["*"] || "";
+        raw = htmlToText(html);
+        /* parse joins without our sep — request one term at a time below if needed */
+        if (!raw.includes(sep) && still.length > 1) {
+          for (const n of still) {
+            const term = cleanForm(n.form).replace(/^\*/, "");
+            const code = String(n.languageCode || "")
+              .split(/[-_/]/)[0]
+              .toLowerCase();
+            try {
+              const one = await js(
+                `${API}?action=expandtemplates&text=${encodeURIComponent(`{{xlit|${code}|${term}}}`)}&prop=wikitext&format=json&formatversion=2&origin=*`,
+                { signal }
+              );
+              const tr = stripXlit(one.expandtemplates?.wikitext || "");
+              if (tr && tr !== term && !/\{\{|Module:|script error/i.test(tr)) {
+                n.transliteration = tr;
+                xlitCache.set(`${code}|${term}`, tr);
+              }
+            } catch (e) {
+              if (e?.name === "AbortError") throw e;
+            }
+          }
+          raw = "";
+        }
+      }
+      if (raw) {
+        const parts = raw.split(sep);
+        still.forEach((n, i) => {
+          const term = cleanForm(n.form).replace(/^\*/, "");
+          const code = String(n.languageCode || "")
+            .split(/[-_/]/)[0]
+            .toLowerCase();
+          const tr = stripXlit(parts[i] || "");
+          if (!tr || tr === term || /\{\{|Module:|script error/i.test(tr)) return;
+          n.transliteration = tr;
+          xlitCache.set(`${code}|${term}`, tr);
+        });
+      }
     } catch (e) {
       if (e?.name === "AbortError") throw e;
     }

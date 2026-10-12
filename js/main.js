@@ -1025,7 +1025,10 @@ migrateLegacyLocalStorage()
 
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    navigator.serviceWorker
+      .register("./sw.js")
+      .then((reg) => reg.update())
+      .catch(() => {
       /* ignore — HTTP context / unsupported */
     });
   });

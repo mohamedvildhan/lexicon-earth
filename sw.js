@@ -1,5 +1,5 @@
 /* Lexicon Earth service worker — offline shell + GeoJSON + CDN runtime cache */
-const CACHE_VERSION = "lx-v36";
+const CACHE_VERSION = "lx-v37";
 const SHELL = "lx-shell-" + CACHE_VERSION;
 const RUNTIME = "lx-runtime-" + CACHE_VERSION;
 
@@ -108,14 +108,37 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  /* Same-origin assets: cache-first, then network */
+  /* JS/CSS/data: network-first so deploys + romanization fixes show on refresh */
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.includes("/js/") ||
+      url.pathname.includes("/css/") ||
+      url.pathname.endsWith(".js") ||
+      url.pathname.endsWith(".css") ||
+      url.pathname.includes("/data/"))
+  ) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  /* Other same-origin assets (GeoJSON, images): cache-first */
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>
           hit ||
           fetch(req).then((res) => {
-            if (res.ok && (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/") || url.pathname.startsWith("/assets/") || url.pathname.startsWith("/data/"))) {
+            if (res.ok) {
               const copy = res.clone();
               caches.open(SHELL).then((c) => c.put(req, copy));
             }
