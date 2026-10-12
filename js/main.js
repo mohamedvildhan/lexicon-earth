@@ -685,7 +685,7 @@ async function chooseWord(raw) {
     wrap.className = "suggest-wrap";
     const intro = document.createElement("div");
     intro.className = "suggest-intro";
-    intro.textContent = `No Wiktionary entry for “${query}”. Try:`;
+    intro.textContent = `No exact Wiktionary page for “${query}”. Closest titles:`;
     wrap.appendChild(intro);
     const row = document.createElement("div");
     row.className = "suggest-row";

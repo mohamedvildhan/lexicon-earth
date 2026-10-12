@@ -9,8 +9,13 @@ let abortCtrl = null;
  * @returns {Promise<string[]>}
  */
 export async function fetchOpenSearch(query, { limit = 6, signal } = {}) {
-  const q = String(query || "").trim();
-  if (q.length < 2) return [];
+  const q = String(query || "")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+    .normalize("NFC")
+    .trim();
+  /* Allow 1 char for non-Latin scripts (Thaana, CJK, Arabic, …) */
+  const nonLatin = /[^\u0000-\u00ff]/.test(q);
+  if (q.length < (nonLatin ? 1 : 2)) return [];
 
   const key = q.toLowerCase();
   const hit = cache.get(key);
@@ -32,6 +37,10 @@ export async function fetchOpenSearch(query, { limit = 6, signal } = {}) {
  * Debounced typeahead controller.
  * @param {(q: string) => void} onIdle optional
  */
+function minCharsFor(q) {
+  return /[^\u0000-\u00ff]/.test(q) ? 1 : 2;
+}
+
 export function createTypeahead({
   input,
   onSuggestions,
@@ -58,9 +67,13 @@ export function createTypeahead({
   };
 
   const onInput = () => {
-    const q = input.value.trim();
+    const q = input.value
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+      .normalize("NFC")
+      .trim();
     clearTimeout(timer);
-    if (q.length < minChars) {
+    const need = Math.min(minChars, minCharsFor(q));
+    if (q.length < need) {
       if (abortCtrl) abortCtrl.abort();
       onClear?.();
       return;
@@ -84,7 +97,11 @@ export function createTypeahead({
     },
     flush(q = input.value.trim()) {
       clearTimeout(timer);
-      if (q.length >= minChars) return run(q);
+      const cleaned = String(q || "")
+        .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+        .normalize("NFC")
+        .trim();
+      if (cleaned.length >= minCharsFor(cleaned)) return run(cleaned);
       onClear?.();
     },
   };

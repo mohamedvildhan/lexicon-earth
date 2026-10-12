@@ -152,12 +152,53 @@ function htmlToText(html) {
 function restGroupsForLang(data, langCode) {
   if (!data || typeof data !== "object") return [];
   if (langCode && Array.isArray(data[langCode])) return data[langCode];
+  /* REST often buckets non-Latin entries under "other" */
+  if (langCode && langCode !== "en" && Array.isArray(data.other)) return data.other;
   if (Array.isArray(data.en)) return data.en;
+  if (Array.isArray(data.other)) return data.other;
   /* Fall back to first language bucket on the page */
   for (const v of Object.values(data)) {
     if (Array.isArray(v) && v.length) return v;
   }
   return [];
+}
+
+/** Guess preferred Wiktionary L2 heading(s) from the query’s script. */
+function preferredLanguagesForQuery(q) {
+  const s = String(q || "");
+  if (/[\u0780-\u07BF]/.test(s)) return ["Dhivehi"]; /* Thaana */
+  if (/[\u0600-\u06FF\u0750-\u077F]/.test(s)) return ["Arabic", "Persian", "Urdu", "Ottoman Turkish"];
+  if (/[\u0400-\u04FF]/.test(s)) return ["Russian", "Ukrainian", "Bulgarian", "Serbo-Croatian"];
+  if (/[\u3040-\u30FF]/.test(s)) return ["Japanese"];
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(s)) return ["Chinese", "Japanese", "Korean"];
+  if (/[\uAC00-\uD7AF]/.test(s)) return ["Korean"];
+  if (/[\u0900-\u097F]/.test(s)) return ["Hindi", "Sanskrit", "Nepali", "Marathi"];
+  if (/[\u0D80-\u0DFF]/.test(s)) return ["Sinhalese"];
+  if (/[\u0E00-\u0E7F]/.test(s)) return ["Thai"];
+  if (/[\u0E80-\u0EFF]/.test(s)) return ["Lao"];
+  if (/[\u1000-\u109F]/.test(s)) return ["Burmese"];
+  if (/[\u1200-\u137F]/.test(s)) return ["Amharic", "Tigrinya"];
+  if (/[\u0530-\u058F]/.test(s)) return ["Armenian"];
+  if (/[\u10A0-\u10FF]/.test(s)) return ["Georgian"];
+  if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(s)) return ["Greek", "Ancient Greek"];
+  if (/[\u0590-\u05FF]/.test(s)) return ["Hebrew", "Yiddish"];
+  if (/[\u0B80-\u0BFF]/.test(s)) return ["Tamil"];
+  if (/[\u0C00-\u0C7F]/.test(s)) return ["Telugu"];
+  if (/[\u0C80-\u0CFF]/.test(s)) return ["Kannada"];
+  if (/[\u0D00-\u0D7F]/.test(s)) return ["Malayalam"];
+  if (/[\u0980-\u09FF]/.test(s)) return ["Bengali", "Assamese"];
+  if (/[\u0A00-\u0A7F]/.test(s)) return ["Punjabi"];
+  if (/[\u0A80-\u0AFF]/.test(s)) return ["Gujarati"];
+  if (/[\u0B00-\u0B7F]/.test(s)) return ["Odia"];
+  return [];
+}
+
+function titleVariants(q) {
+  const nfc = String(q || "").normalize("NFC").trim();
+  if (!nfc) return [];
+  const titled = nfc.charAt(0).toUpperCase() + nfc.slice(1).toLowerCase();
+  /* Avoid Latin-only case munging destroying non-cased scripts — Set keeps uniques */
+  return [...new Set([nfc, nfc.toLowerCase(), nfc.toUpperCase(), titled].filter(Boolean))];
 }
 
 async function fetchDefinition(title, { signal, langCode = "en" } = {}) {
@@ -251,13 +292,20 @@ function sensePreviewFromSlice(slice) {
   return { pos, gloss };
 }
 
-/** L2 language headings on a Wiktionary page (English preferred first). */
-function listL2Languages(sections) {
+/**
+ * L2 language headings on a Wiktionary page.
+ * Prefers script-matched languages, then English, then A–Z.
+ */
+function listL2Languages(sections, preferred = []) {
   const names = (sections || [])
     .filter((x) => x.toclevel === 1 && x.line && !/^(Translingual|References|Further reading)$/i.test(x.line))
     .map((x) => x.line);
   const uniq = [...new Set(names)];
+  const pref = new Map((preferred || []).map((n, i) => [String(n).toLowerCase(), i]));
   uniq.sort((a, b) => {
+    const ap = pref.has(a.toLowerCase()) ? pref.get(a.toLowerCase()) : 1000;
+    const bp = pref.has(b.toLowerCase()) ? pref.get(b.toLowerCase()) : 1000;
+    if (ap !== bp) return ap - bp;
     if (a === "English") return -1;
     if (b === "English") return 1;
     return a.localeCompare(b);
@@ -439,76 +487,110 @@ export class WiktionaryAdapter extends SourceAdapter {
   }
 
   async searchCandidates(query, opts = {}) {
-    const q = String(query || "").trim();
+    const q = String(query || "")
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+      .normalize("NFC")
+      .trim();
     if (!q) return [];
     const { signal } = opts;
+    const preferred = preferredLanguagesForQuery(q);
+
+    const parseTitle = async (t) => {
+      const d = await js(
+        `${API}?action=parse&page=${encodeURIComponent(t)}&prop=wikitext|sections&format=json&formatversion=2&redirects=1&origin=*`,
+        { signal }
+      );
+      if (!d.parse?.title) return null;
+      const l2 = listL2Languages(d.parse.sections || [], preferred);
+      if (!l2.length) return null;
+      const fullWt =
+        typeof d.parse.wikitext === "string" ? d.parse.wikitext : d.parse.wikitext?.["*"] || "";
+      return { title: d.parse.title, fullWt, secs: d.parse.sections, l2 };
+    };
+
+    let page = null;
+    const tried = new Set();
+    for (const t of titleVariants(q)) {
+      if (tried.has(t)) continue;
+      tried.add(t);
+      try {
+        page = await parseTitle(t);
+        if (page) break;
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+      }
+    }
+
+    /* OpenSearch / fulltext: resolve real pages (incl. exact non-Latin titles) */
+    let openTitles = [];
+    if (!page) {
+      try {
+        openTitles =
+          (await js(
+            `${API}?action=opensearch&search=${encodeURIComponent(q)}&limit=8&format=json&origin=*`,
+            { signal }
+          ))[1] || [];
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+      }
+      if (!openTitles.length) {
+        try {
+          const sr = await js(
+            `${API}?action=query&list=search&srsearch=${encodeURIComponent(q)}&srnamespace=0&srlimit=8&format=json&formatversion=2&origin=*`,
+            { signal }
+          );
+          openTitles = (sr.query?.search || []).map((row) => row.title).filter(Boolean);
+        } catch (e) {
+          if (e?.name === "AbortError") throw e;
+        }
+      }
+      for (const t of openTitles) {
+        if (!t || tried.has(t)) continue;
+        tried.add(t);
+        try {
+          page = await parseTitle(t);
+          if (page) break;
+        } catch (e) {
+          if (e?.name === "AbortError") throw e;
+        }
+      }
+    }
+
+    if (!page) {
+      const qLower = q.toLowerCase();
+      const seen = new Set();
+      const useful = [];
+      for (const s of openTitles) {
+        const key = String(s).toLowerCase();
+        if (!key || seen.has(key) || key === qLower) continue;
+        seen.add(key);
+        useful.push(s);
+        if (useful.length >= 5) break;
+      }
+      return useful.map((s) => ({
+        id: `wikt:suggest:${s}`,
+        lemma: s,
+        language: "any",
+        languageCode: "",
+        sense: "suggestion",
+        gloss: "Suggested spelling from Wiktionary open search",
+        sourceId: this.id,
+        meta: { suggestion: true },
+      }));
+    }
+
+    const { title, fullWt, secs } = page;
+    const languages = listL2Languages(secs, preferred);
     const out = [];
-    let title = null;
-    let fullWt = null;
-    let secs = null;
 
-    /*
-     * Try lowercase, original, then Title Case — Wiktionary lemmas are often
-     * capitalized (Gaia, Earth) while users type lowercase.
-     */
-    const titled = q.charAt(0).toUpperCase() + q.slice(1).toLowerCase();
-    const variants = [...new Set([q.toLowerCase(), q, titled].filter(Boolean))];
-    for (const t of variants) {
-      try {
-        const d = await js(
-          `${API}?action=parse&page=${encodeURIComponent(t)}&prop=wikitext|sections&format=json&formatversion=2&redirects=1&origin=*`,
-          { signal }
-        );
-        const l2 = listL2Languages(d.parse?.sections || []);
-        if (d.parse?.title && l2.length) {
-          title = d.parse.title;
-          fullWt = typeof d.parse.wikitext === "string" ? d.parse.wikitext : d.parse.wikitext?.["*"] || "";
-          secs = d.parse.sections;
-          break;
-        }
-      } catch (e) {
-        if (e?.name === "AbortError") throw e;
-      }
-    }
-
-    if (!title) {
-      try {
-        const sugg =
-          (await js(`${API}?action=opensearch&search=${encodeURIComponent(q)}&limit=8&format=json&origin=*`, { signal }))[1] ||
-          [];
-        const qLower = q.toLowerCase();
-        const seen = new Set();
-        const useful = [];
-        for (const s of sugg) {
-          const key = String(s).toLowerCase();
-          if (!key || seen.has(key)) continue;
-          if (key === qLower) continue;
-          seen.add(key);
-          useful.push(s);
-          if (useful.length >= 5) break;
-        }
-        return useful.map((s) => ({
-          id: `wikt:suggest:${s}`,
-          lemma: s,
-          language: "any",
-          languageCode: "",
-          sense: "suggestion",
-          gloss: "Suggested spelling from Wiktionary open search",
-          sourceId: this.id,
-          meta: { suggestion: true },
-        }));
-      } catch (e) {
-        if (e?.name === "AbortError") throw e;
-        return [];
-      }
-    }
-
-    const languages = listL2Languages(secs);
     for (const langName of languages) {
       const extracted = extractLanguageEtymologies(fullWt, secs, langName);
       if (!extracted) continue;
       const langInfo = lookupLanguageByName(langName);
-      const langCode = langInfo.code && langInfo.name !== langInfo.code ? langInfo.code : langName.slice(0, 3).toLowerCase();
+      const langCode =
+        langInfo.code && langInfo.name !== langInfo.code
+          ? langInfo.code
+          : langName.slice(0, 3).toLowerCase();
       const ets = extracted.ets || [];
       let restDefs = null;
 

@@ -34,7 +34,10 @@ export function getMultiSource() {
 
 export function normalizeQuery(raw) {
   const original = String(raw ?? "");
-  const trimmed = original.trim();
+  /* Strip bidi/zero-width marks that break exact Wiktionary title matches */
+  const trimmed = original
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, "")
+    .trim();
   const normalized = trimmed.normalize("NFC");
   return {
     original,
