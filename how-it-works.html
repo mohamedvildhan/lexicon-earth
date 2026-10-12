@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#f5f2e9">
-<meta name="description" content="How Lexicon Earth builds word lineages and maps them on the globe.">
+<meta name="description" content="How Lexicon Earth searches multi-language Wiktionary entries and maps lineages on the globe.">
 <title>How it works — Lexicon Earth</title>
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -29,8 +29,8 @@
   <p class="lede">From a typed word to a globe path — what Lexicon Earth fetches, what it invents, and how to read the result.</p>
 
   <h2>1. Search</h2>
-  <p>You enter an English word. The app asks Wiktionary for the matching page (trying common capitalizations), then looks for English etymology sections in the page wikitext.</p>
-  <p>If several etymologies exist (homographs), you can choose which sense to load. Optional multi-source mode can also query Wikidata and Kaikki.</p>
+  <p>You enter a word in any script Wiktionary supports (for example English, Dhivehi, Italian, Arabic, or Chinese). The app looks up the matching page — trying common capitalizations for Latin scripts, Unicode normalization, and OpenSearch / fulltext when needed — then reads the language sections on that page. When your query’s script suggests a language (Thaana → Dhivehi, Cyrillic → Russian, and similar), that section is preferred.</p>
+  <p>If several etymologies or language entries exist, you can choose which sense to load in the panel. Optional multi-source mode can also query Wikidata and Kaikki.</p>
 
   <h2>2. Parse a lineage</h2>
   <p>Etymology templates in Wiktionary (inheritance, borrowing, derivation, and related forms) are parsed into a chain of word-forms. Each form keeps its language label, gloss when available, and epistemic status (attested, reconstructed, disputed).</p>
@@ -50,7 +50,7 @@
   </ul>
 
   <div class="callout">
-    <p><strong>Example:</strong> Searching <em>orange</em> may show a chain through India, Persia, Arabia, and Western Europe. The arcs illustrate sequence in the extracted etymology — not a documented caravan route.</p>
+    <p><strong>Examples:</strong> Searching <em>orange</em> may show a chain through India, Persia, Arabia, and Western Europe. Searching <em>ދިވެހި</em> opens the Dhivehi section on Wiktionary. The arcs illustrate sequence in the extracted etymology — not a documented travel route.</p>
   </div>
 
   <h2>5. Cache &amp; offline</h2>
@@ -58,13 +58,14 @@
 
   <h2>Limits worth knowing</h2>
   <ul>
-    <li>Coverage is strongest for English entries on Wiktionary.</li>
+    <li>Coverage follows Wiktionary: well-documented languages and lemmas work best; sparse entries may show a single form or no map path.</li>
+    <li>We read the English-edition Wiktionary host (<code>en.wiktionary.org</code>), which includes many non-English language sections — not every language edition of Wiktionary.</li>
     <li>Reconstructed proto-forms are hypotheses; the UI marks them as such when possible.</li>
     <li>Multi-source mode is slower and may return alternate candidate senses.</li>
     <li>Always open the cited Wiktionary page for full context, footnotes, and debate.</li>
   </ul>
 
-  <p class="note">Last updated: 11 October 2026</p>
+  <p class="note">Last updated: 13 October 2026</p>
 </main>
 
 <footer class="site-footer">

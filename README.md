@@ -1,6 +1,6 @@
 # Lexicon Earth
 
-Local-first etymological globe: search a word, build a lineage graph from free structured sources, and view schematic geographic associations on a 3D Earth.
+Local-first etymological globe: search a word in many languages and scripts, build a lineage graph from free structured sources, and view schematic geographic associations on a 3D Earth.
 
 **Live:** [https://mohamedvildhan.github.io/lexicon-earth/](https://mohamedvildhan.github.io/lexicon-earth/)  
 **Repo:** [https://github.com/mohamedvildhan/lexicon-earth](https://github.com/mohamedvildhan/lexicon-earth)
@@ -33,7 +33,7 @@ Add a new source by implementing `SourceAdapter` (`searchCandidates`, `fetchLine
 
 | Source | Use | License |
 |--------|-----|---------|
-| English Wiktionary (MediaWiki + REST) | Etymology templates, definitions | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Wiktionary en.wiktionary.org (MediaWiki + REST) | Multi-language etymology sections & definitions | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
 | Wikidata Lexemes (SPARQL P5191/P5238) | Structured derivation links | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Kaikki / Wiktextract | Optional structured assist (often CORS-blocked in browsers) | CC BY-SA 4.0 (from Wiktionary) |
 | Natural Earth land & coastline 1:50m | B&W topographic wireframe outlines | Public domain |
