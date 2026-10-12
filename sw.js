@@ -1,5 +1,5 @@
 /* Lexicon Earth service worker — offline shell + GeoJSON + CDN runtime cache */
-const CACHE_VERSION = "lx-v32";
+const CACHE_VERSION = "lx-v33";
 const SHELL = "lx-shell-" + CACHE_VERSION;
 const RUNTIME = "lx-runtime-" + CACHE_VERSION;
 
