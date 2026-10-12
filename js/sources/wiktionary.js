@@ -4,11 +4,15 @@ import {
   makeNode,
   makeEdge,
   cleanForm,
+  needsRomanization,
   REL_TYPES,
   EPISTEMIC,
   GEO_BASIS,
 } from "../model.js";
 import { lookupLanguage, lookupLanguageByName, period, GEO_CONFIDENCE } from "../languages.js";
+
+/** In-memory Wiktionary {{xlit}} results for this session. */
+const xlitCache = new Map();
 
 const API = "https://en.wiktionary.org/w/api.php";
 const REST = "https://en.wiktionary.org/api/rest_v1/page/definition/";
@@ -379,6 +383,87 @@ function extractEnglishEtymologies(fullWt, sections) {
   return extractLanguageEtymologies(fullWt, sections, "English");
 }
 
+/** First IPA transcription in wikitext, if any (e.g. huː.n̪u). */
+function extractIpa(wt) {
+  const m = String(wt || "").match(/\{\{IPA\|[^|}]*\|\/([^/|}]+)\//i);
+  return m ? m[1].trim() : "";
+}
+
+/**
+ * Fill missing transliterations for non-Latin forms via Wiktionary {{xlit}}.
+ * One batched expandtemplates call per lineage to stay under rate limits.
+ */
+async function enrichTransliterations(nodes, { signal, pageWt = "" } = {}) {
+  if (!nodes?.length) return;
+
+  const jobs = nodes.filter(
+    (n) => !stripXlit(n.transliteration) && needsRomanization(n.form) && !isDashForm(n.form)
+  );
+
+  for (const n of jobs) {
+    const term = cleanForm(n.form).replace(/^\*/, "");
+    const code = String(n.languageCode || "")
+      .split(/[-_/]/)[0]
+      .toLowerCase();
+    const hit = xlitCache.get(`${code}|${term}`);
+    if (hit) n.transliteration = hit;
+  }
+
+  const still = jobs.filter((n) => !stripXlit(n.transliteration));
+  if (still.length) {
+    const sep = "@@";
+    try {
+      const text = still
+        .map((n) => {
+          const term = cleanForm(n.form).replace(/^\*/, "");
+          const code = String(n.languageCode || "")
+            .split(/[-_/]/)[0]
+            .toLowerCase();
+          return `{{xlit|${code}|${term}}}`;
+        })
+        .join(sep);
+      const d = await js(
+        `${API}?action=expandtemplates&text=${encodeURIComponent(text)}&prop=wikitext&format=json&formatversion=2&origin=*`,
+        { signal }
+      );
+      const parts = String(d.expandtemplates?.wikitext || "").split(sep);
+      still.forEach((n, i) => {
+        const term = cleanForm(n.form).replace(/^\*/, "");
+        const code = String(n.languageCode || "")
+          .split(/[-_/]/)[0]
+          .toLowerCase();
+        const tr = stripXlit(parts[i] || "");
+        if (!tr || tr === term || /\{\{|Module:|script error/i.test(tr)) return;
+        n.transliteration = tr;
+        xlitCache.set(`${code}|${term}`, tr);
+      });
+    } catch (e) {
+      if (e?.name === "AbortError") throw e;
+    }
+  }
+
+  const ipa = extractIpa(pageWt);
+  if (ipa) {
+    const head = nodes[nodes.length - 1];
+    if (head && !stripXlit(head.transliteration) && needsRomanization(head.form)) {
+      head.transliteration = ipa;
+    }
+  }
+}
+
+function stripXlit(s) {
+  return String(s || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\{\{[^}]*\}\}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isDashForm(form) {
+  const f = cleanForm(form);
+  return !f || f === "—" || f === "-" || f === "…" || f === "?";
+}
+
 function buildGraph(title, pe, citation, headLanguage = "English", headLanguageCode = "en") {
   const nodes = [];
   const edges = [];
@@ -696,6 +781,26 @@ export class WiktionaryAdapter extends SourceAdapter {
 
     const { nodes, edges, gaps } = buildGraph(title, pe, citation, headLanguage, headLanguageCode);
     const definition = await defP;
+
+    /* Prefer full-page wikitext for IPA when the head still needs a romanization */
+    let pageWt = wt || "";
+    const headNeeds =
+      nodes.some((n) => needsRomanization(n.form) && !stripXlit(n.transliteration));
+    if (headNeeds) {
+      try {
+        const d = await js(
+          `${API}?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`,
+          { signal }
+        );
+        pageWt =
+          typeof d.parse?.wikitext === "string"
+            ? d.parse.wikitext
+            : d.parse?.wikitext?.["*"] || pageWt;
+      } catch (e) {
+        if (e?.name === "AbortError") throw e;
+      }
+    }
+    await enrichTransliterations(nodes, { signal, pageWt });
 
     return {
       nodes,

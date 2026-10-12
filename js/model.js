@@ -39,6 +39,20 @@ export function isUnrecordedForm(n) {
   return !f || f === "—" || f === "-" || f === "…" || f === "?";
 }
 
+/** True when a form is largely non-Latin script (Devanagari, Thaana, CJK, …). */
+export function needsRomanization(form) {
+  const t = cleanForm(form).replace(/^\*/, "");
+  if (!t || t === "—" || t === "-" || t === "…" || t === "?") return false;
+  try {
+    const letters = [...t].filter((ch) => /\p{L}/u.test(ch));
+    if (!letters.length) return false;
+    const nonLatin = letters.filter((ch) => !/\p{Script=Latin}/u.test(ch));
+    return nonLatin.length / letters.length >= 0.25;
+  } catch {
+    return /[^\u0000-\u024F\s*'’.\-]/.test(t);
+  }
+}
+
 /** Strip refs, comments, and HTML from any user-visible string. */
 export function stripDisplayText(s) {
   return String(s ?? "")

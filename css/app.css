@@ -741,6 +741,18 @@ body:has(#arcLegend:not([hidden])) .canvas-hint {
   margin: 13px 0 8px;
 }
 
+.word-roman,
+.term-roman {
+  font: 500 0.72em/1.2 var(--serif);
+  font-style: italic;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.term-roman {
+  font-size: 14px;
+}
+
 .definition {
   font-size: 13px;
   line-height: 1.6;
@@ -860,6 +872,16 @@ body:has(#arcLegend:not([hidden])) .canvas-hint {
   font: 500 17px var(--serif);
   line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.term .term-roman::before {
+  content: "(";
+  font-style: normal;
+}
+
+.term .term-roman::after {
+  content: ")";
+  font-style: normal;
 }
 
 .place {

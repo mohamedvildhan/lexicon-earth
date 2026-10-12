@@ -12,6 +12,7 @@ import {
   STATUS_LABEL,
   cleanForm,
   isUnrecordedForm,
+  needsRomanization,
   stripDisplayText,
   buildLineageSummary,
   countUncertainLinks,
@@ -371,11 +372,25 @@ function renderEtymAlternatives() {
 function renderPanel() {
   const r = active;
   if (!r) return;
-  $("panelTitle").textContent = stripDisplayText(r.word);
+  const N = topologicalOrder(r.nodes, r.edges);
+  const titleEl = $("panelTitle");
+  const headForm = stripDisplayText(r.word);
+  const headNode =
+    [...N].reverse().find((n) => cleanForm(n.form) === cleanForm(r.word)) ||
+    N[N.length - 1] ||
+    r.nodes[r.nodes.length - 1];
+  const headRoman = stripDisplayText(headNode?.transliteration || "");
+  titleEl.replaceChildren();
+  titleEl.append(document.createTextNode(headForm || "—"));
+  if (headRoman && needsRomanization(headForm) && headRoman.toLowerCase() !== headForm.toLowerCase()) {
+    const rom = document.createElement("span");
+    rom.className = "word-roman";
+    rom.textContent = headRoman;
+    titleEl.append(document.createTextNode(" "));
+    titleEl.append(rom);
+  }
   $("panelDefinition").textContent = stripDisplayText(r.definition) || "Definition unavailable.";
   renderEtymAlternatives();
-
-  const N = topologicalOrder(r.nodes, r.edges);
   const mapped = N.filter((n) => n.lat != null && n.lon != null);
   const unmapped = N.filter((n) => n.lat == null || n.lon == null);
   const summary = buildLineageSummary(r);
@@ -468,8 +483,22 @@ function renderPanel() {
     el.querySelector(".lang-era").textContent = `${n.language}${region ? " · " + region : ""}${
       era ? " · language period c. " + era : ""
     }`;
-    el.querySelector(".term").textContent =
-      form + (!unrecorded && n.transliteration ? ` (${stripDisplayText(n.transliteration)})` : "");
+    const termEl = el.querySelector(".term");
+    termEl.replaceChildren();
+    termEl.append(document.createTextNode(form));
+    const roman = !unrecorded ? stripDisplayText(n.transliteration) : "";
+    if (
+      roman &&
+      needsRomanization(form) &&
+      roman.toLowerCase() !== form.toLowerCase() &&
+      roman.toLowerCase() !== form.replace(/^\*/, "").toLowerCase()
+    ) {
+      const rom = document.createElement("span");
+      rom.className = "term-roman";
+      rom.textContent = roman;
+      termEl.append(document.createTextNode(" "));
+      termEl.append(rom);
+    }
     const pl = el.querySelector(".place");
     const gloss = stripDisplayText(n.gloss);
     if (gloss) {
