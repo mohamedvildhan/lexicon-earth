@@ -439,9 +439,9 @@ export class Globe {
     for (const n of geo) {
       maxSpan = Math.max(maxSpan, angularDistanceDeg(center.lat, center.lon, n.lat, n.lon));
     }
-    /* Light framing only — stay near default distance, just center the region */
-    const framed = 2.05 + (maxSpan / 80) * 0.45;
-    const endDist = Math.max(1.95, Math.min(DEFAULT_DIST + 0.25, framed));
+    /* Fit all mapped nodes in view — wider span → pull back */
+    const framed = 1.85 + (maxSpan / 55) * 0.85;
+    const endDist = Math.max(1.75, Math.min(MAX_DIST - 0.2, framed));
 
     if (!this.reducedMotion && geo.length > 1) {
       this._journeyCam = {
@@ -582,58 +582,89 @@ export class Globe {
         arc.epistemic === "disputed" ||
         arc.epistemic === "reconstructed" ||
         arc.epistemic === "uncertain";
+      const bridged = !!arc.bridged;
 
       const group = new THREE.Group();
       group.userData.arcIndex = ai;
       group.userData.appearAt = ai / arcCount;
       group.userData.curve = curve;
       group.userData.kind = "arc";
+      group.userData.bridged = bridged;
 
-      const glowGeo = new THREE.TubeGeometry(curve, 80, uncertain ? 0.0032 : 0.004, 6, false);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.2,
-        depthWrite: false,
-      });
-      const glow = new THREE.Mesh(glowGeo, glowMat);
-      glow.userData.role = "glow";
-      glow.userData.fullIndexCount = glowGeo.index ? glowGeo.index.count : 0;
-      group.add(glow);
-
-      const coreGeo = new THREE.TubeGeometry(curve, 80, uncertain ? 0.0014 : 0.0018, 5, false);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: uncertain ? 0.75 : 0.95,
-      });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      core.userData.role = "core";
-      core.userData.fullIndexCount = coreGeo.index ? coreGeo.index.count : 0;
-      group.add(core);
-
-      /* bright traveler that flows along the route */
-      const pulse = new THREE.Mesh(
-        new THREE.SphereGeometry(0.0065, 8, 8),
-        new THREE.MeshBasicMaterial({
-          color: 0xfff6e8,
-          transparent: true,
-          opacity: 0.9,
-        })
-      );
-      const pulseHalo = new THREE.Mesh(
-        new THREE.SphereGeometry(0.011, 8, 8),
-        new THREE.MeshBasicMaterial({
+      if (bridged) {
+        /* Skipped unmapped stages — dashed, readable against dark ocean */
+        const underGeo = new THREE.TubeGeometry(curve, 80, 0.0024, 5, false);
+        const underMat = new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.35,
+          opacity: 0.22,
           depthWrite: false,
-        })
-      );
-      pulse.add(pulseHalo);
-      pulse.userData.role = "pulse";
-      pulse.position.copy(curve.getPoint(0));
-      group.add(pulse);
+        });
+        const under = new THREE.Mesh(underGeo, underMat);
+        under.userData.role = "glow";
+        under.userData.fullIndexCount = underGeo.index ? underGeo.index.count : 0;
+        group.add(under);
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const dashMat = new THREE.LineDashedMaterial({
+          color,
+          transparent: true,
+          opacity: 0.82,
+          dashSize: 0.055,
+          gapSize: 0.028,
+          depthWrite: false,
+        });
+        const dash = new THREE.Line(lineGeo, dashMat);
+        dash.computeLineDistances();
+        dash.userData.role = "core";
+        dash.userData.fullIndexCount = pts.length;
+        group.add(dash);
+      } else {
+        const glowGeo = new THREE.TubeGeometry(curve, 80, uncertain ? 0.0032 : 0.004, 6, false);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.2,
+          depthWrite: false,
+        });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.userData.role = "glow";
+        glow.userData.fullIndexCount = glowGeo.index ? glowGeo.index.count : 0;
+        group.add(glow);
+
+        const coreGeo = new THREE.TubeGeometry(curve, 80, uncertain ? 0.0014 : 0.0018, 5, false);
+        const coreMat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: uncertain ? 0.75 : 0.95,
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.userData.role = "core";
+        core.userData.fullIndexCount = coreGeo.index ? coreGeo.index.count : 0;
+        group.add(core);
+
+        const pulse = new THREE.Mesh(
+          new THREE.SphereGeometry(0.0065, 8, 8),
+          new THREE.MeshBasicMaterial({
+            color: 0xfff6e8,
+            transparent: true,
+            opacity: 0.9,
+          })
+        );
+        const pulseHalo = new THREE.Mesh(
+          new THREE.SphereGeometry(0.011, 8, 8),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          })
+        );
+        pulse.add(pulseHalo);
+        pulse.userData.role = "pulse";
+        pulse.position.copy(curve.getPoint(0));
+        group.add(pulse);
+      }
 
       this.routes.add(group);
     });
@@ -719,14 +750,18 @@ export class Globe {
       });
       this.labelLayer.appendChild(el);
     });
-    /* Measure once after mount — avoids layout thrash in the render loop */
     [...this.labelLayer.children].forEach((el) => {
+      el.classList.remove("badge");
       el.style.display = "flex";
       el.style.visibility = "hidden";
       el.style.left = "0px";
       el.style.top = "0px";
       el._rw = el.offsetWidth;
       el._rh = el.offsetHeight;
+      el.classList.add("badge");
+      el._brw = el.offsetWidth;
+      el._brh = el.offsetHeight;
+      el.classList.remove("badge");
     });
     this._placeLabels();
   }
@@ -738,7 +773,14 @@ export class Globe {
     const h = layerRect.height || this.canvas.clientHeight || innerHeight;
     const GAP = 5;
     const SIDE = 18;
-    const MARGIN = 8;
+    /* Keep labels below search / above journey chrome */
+    const search = document.getElementById("searchArea");
+    const bar = document.querySelector(".timeline-bar");
+    const searchBottom = search ? search.getBoundingClientRect().bottom - layerRect.top + 8 : 8;
+    const barTop = bar ? bar.getBoundingClientRect().top - layerRect.top - 8 : h - 8;
+    const MARGIN_X = 8;
+    const MARGIN_TOP = Math.max(8, Math.min(h * 0.35, searchBottom));
+    const MARGIN_BOTTOM = Math.max(8, h - Math.max(h * 0.65, barTop));
     const worldPos = this._scratchWorld;
     const normal = this._scratchNormal;
     const view = this._scratchView;
@@ -769,20 +811,26 @@ export class Globe {
       const sx = (projected.x * 0.5 + 0.5) * w;
       const sy = (-projected.y * 0.5 + 0.5) * h;
       el.style.display = "flex";
-      el.classList.toggle("selected", i === this.selectedIdx);
+      const selected = i === this.selectedIdx;
+      el.classList.toggle("selected", selected);
       el.classList.toggle("hover", i === this.hoverIdx);
       items.push({
         el,
         i,
         sx,
         sy,
+        selected,
         rw: el._rw || el.offsetWidth,
         rh: el._rh || el.offsetHeight,
+        brw: el._brw || 28,
+        brh: el._brh || 22,
       });
     });
 
-    /* Prefer right side; fall back left / staggered vertical when clustered */
-    items.sort((a, b) => a.sy - b.sy || a.sx - b.sx || a.i - b.i);
+    items.sort((a, b) => {
+      if (a.selected !== b.selected) return a.selected ? -1 : 1;
+      return a.sy - b.sy || a.sx - b.sx || a.i - b.i;
+    });
     const placed = [];
 
     const overlaps = (a, b) =>
@@ -792,58 +840,75 @@ export class Globe {
       a.bottom + GAP > b.top;
 
     const clampBox = (left, top, rw, rh) => {
-      const L = Math.max(MARGIN, Math.min(w - rw - MARGIN, left));
-      const T = Math.max(MARGIN, Math.min(h - rh - MARGIN, top));
+      const L = Math.max(MARGIN_X, Math.min(w - rw - MARGIN_X, left));
+      const T = Math.max(MARGIN_TOP, Math.min(h - rh - MARGIN_BOTTOM, top));
       return { left: L, top: T, right: L + rw, bottom: T + rh };
     };
 
     for (const item of items) {
-      const { el, sx, sy, rw, rh } = item;
-      const preferRight = sx < w * 0.62;
-      const sides = preferRight
-        ? [
-            { side: "right", left: sx + SIDE, top: sy - rh / 2 },
-            { side: "left", left: sx - SIDE - rw, top: sy - rh / 2 },
-          ]
-        : [
-            { side: "left", left: sx - SIDE - rw, top: sy - rh / 2 },
-            { side: "right", left: sx + SIDE, top: sy - rh / 2 },
-          ];
+      const { el, sx, sy, selected } = item;
+      let useBadge = !selected;
+      let rw = useBadge ? item.brw : item.rw;
+      let rh = useBadge ? item.brh : item.rh;
 
-      let best = null;
-      let bestSide = preferRight ? "right" : "left";
-
-      outer: for (const cand of sides) {
-        for (let step = 0; step < 16; step++) {
-          const dir = step % 2 === 0 ? 1 : -1;
-          const mag = Math.ceil(step / 2);
-          const top = cand.top + dir * mag * (rh + GAP);
-          const box = clampBox(cand.left, top, rw, rh);
-          if (!placed.some((p) => overlaps(p, box))) {
-            best = box;
-            bestSide = cand.side;
-            break outer;
+      const tryPlace = (width, height) => {
+        const preferRight = sx < w * 0.62;
+        const sides = preferRight
+          ? [
+              { side: "right", left: sx + SIDE, top: sy - height / 2 },
+              { side: "left", left: sx - SIDE - width, top: sy - height / 2 },
+            ]
+          : [
+              { side: "left", left: sx - SIDE - width, top: sy - height / 2 },
+              { side: "right", left: sx + SIDE, top: sy - height / 2 },
+            ];
+        for (const cand of sides) {
+          for (let step = 0; step < 16; step++) {
+            const dir = step % 2 === 0 ? 1 : -1;
+            const mag = Math.ceil(step / 2);
+            const top = cand.top + dir * mag * (height + GAP);
+            const box = clampBox(cand.left, top, width, height);
+            if (!placed.some((p) => overlaps(p, box))) {
+              return { box, side: cand.side };
+            }
           }
         }
+        return null;
+      };
+
+      let result = selected ? tryPlace(item.rw, item.rh) : tryPlace(item.rw, item.rh);
+      if (!selected && result) {
+        /* Full label fits — keep it */
+        useBadge = false;
+        rw = item.rw;
+        rh = item.rh;
+      } else if (!selected) {
+        result = tryPlace(item.brw, item.brh);
+        useBadge = true;
+        rw = item.brw;
+        rh = item.brh;
+      }
+      if (!result) {
+        result = {
+          box: clampBox(sx + SIDE, sy - rh / 2, rw, rh),
+          side: "right",
+        };
+        if (!selected) useBadge = true;
       }
 
-      if (!best) {
-        best = clampBox(sx + SIDE, sy - rh / 2, rw, rh);
-        bestSide = "right";
-      }
-
-      placed.push(best);
-      el.dataset.side = bestSide;
-      el.style.left = `${best.left}px`;
-      el.style.top = `${best.top}px`;
+      el.classList.toggle("badge", useBadge && !selected);
+      placed.push(result.box);
+      el.dataset.side = result.side;
+      el.style.left = `${result.box.left}px`;
+      el.style.top = `${result.box.top}px`;
       el.style.visibility = "visible";
 
       const stem = el.querySelector(".globe-label-stem");
       if (stem) {
-        const ax = bestSide === "right" ? 0 : rw;
+        const ax = result.side === "right" ? 0 : rw;
         const ay = rh / 2;
-        const dx = sx - best.left - ax;
-        const dy = sy - best.top - ay;
+        const dx = sx - result.box.left - ax;
+        const dy = sy - result.box.top - ay;
         const len = Math.hypot(dx, dy);
         stem.style.left = `${ax}px`;
         stem.style.top = `${ay}px`;
@@ -1109,11 +1174,14 @@ export class Globe {
         if (role === "core" || role === "glow") {
           const full = child.userData.fullIndexCount || (child.geometry.index ? child.geometry.index.count : 0);
           if (full && child.geometry.setDrawRange) {
-            child.geometry.setDrawRange(0, Math.max(3, Math.floor(full * draw)));
+            const count = child.isLine ? Math.max(2, Math.floor(full * draw)) : Math.max(3, Math.floor(full * draw));
+            child.geometry.setDrawRange(0, count);
           }
           if (child.material) {
-            const base = role === "glow" ? 0.2 : 0.92;
-            child.material.opacity = visible ? base * (0.4 + 0.6 * draw) : 0;
+            const bridged = group.userData.bridged;
+            const base =
+              role === "glow" ? (bridged ? 0.28 : 0.2) : bridged ? 0.85 : 0.92;
+            child.material.opacity = visible ? base * (0.45 + 0.55 * draw) : 0;
           }
         }
         if (role === "pulse" && curve) {

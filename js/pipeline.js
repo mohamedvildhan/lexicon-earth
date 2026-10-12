@@ -1,6 +1,7 @@
 import { adapters, getAdapter } from "./sources/index.js";
 import { makeRecord } from "./model.js";
 import { cacheKey, getEntry, putEntry, findCachedByQuery } from "./db.js";
+import { sanitizeRecordGaps } from "./model.js";
 
 const DISCOVERY_TTL_MS = 5 * 60 * 1000;
 const discoveryCache = new Map();
@@ -196,7 +197,7 @@ export async function loadCached(rawQuery, languageCode = "en", senseId = "0") {
   const key = cacheKey(keyForm, languageCode, senseId);
   const hit = await getEntry(key);
   if (!hit) return null;
-  return { ...hit, fromCache: true, cacheKey: key };
+  return { ...sanitizeRecordGaps(hit), fromCache: true, cacheKey: key };
 }
 
 export async function fetchAndCache(candidate, { original, query, onProgress, seq, signal } = {}) {
@@ -264,14 +265,18 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
   const { original, query, keyForm } = normalizeQuery(rawQuery);
   if (!query) return { status: "empty" };
 
-  if (!force) {
+  /* Offline: serve cache only. Online: always rediscover so multi-etymology
+   * pickers reappear every search (cache must not swallow Etymology 2…). */
+  if (!navigator.onLine) {
     onProgress?.("Checking cache…");
     const cached = (await loadCached(keyForm)) || (await findCachedByQuery(keyForm));
     if (seq !== searchSeq) return { status: "cancelled" };
-    if (cached) return { status: "ready", record: { ...cached, fromCache: true } };
-  }
-
-  if (!navigator.onLine) {
+    if (cached) {
+      return {
+        status: "ready",
+        record: { ...sanitizeRecordGaps(cached), fromCache: true },
+      };
+    }
     return {
       status: "error",
       message: "You’re offline and this word is not in the local cache.",
@@ -286,8 +291,14 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
       : await discoverWiktionary(query, { onProgress, signal });
   } catch (e) {
     if (e?.name === "AbortError" || seq !== searchSeq) return { status: "cancelled" };
-    const cached = await loadCached(keyForm);
-    if (cached) return { status: "ready", record: cached, warning: e.message };
+    const cached = (await loadCached(keyForm)) || (await findCachedByQuery(keyForm));
+    if (cached) {
+      return {
+        status: "ready",
+        record: { ...sanitizeRecordGaps(cached), fromCache: true },
+        warning: e.message,
+      };
+    }
     return { status: "error", message: e.message || "Lookup failed.", retryable: true };
   }
   if (seq !== searchSeq || signal.aborted) return { status: "cancelled" };
@@ -305,8 +316,14 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
         errors: discovery.errors,
       };
     }
-    const cached = await loadCached(keyForm);
-    if (cached) return { status: "ready", record: cached, warning: "Live sources returned no entry; showing cache." };
+    const cached = (await loadCached(keyForm)) || (await findCachedByQuery(keyForm));
+    if (cached) {
+      return {
+        status: "ready",
+        record: { ...sanitizeRecordGaps(cached), fromCache: true },
+        warning: "Live sources returned no entry; showing cache.",
+      };
+    }
     return {
       status: "miss",
       original,
@@ -330,14 +347,33 @@ export async function searchWord(rawQuery, { onProgress, force = false } = {}) {
     };
   }
 
+  const only = real[0];
+  if (!force) {
+    const senseKey = cacheKey(keyForm, only.languageCode || "en", only.id || only.sense || "0");
+    const cachedSense = await getEntry(senseKey);
+    if (cachedSense) {
+      return {
+        status: "ready",
+        record: { ...sanitizeRecordGaps(cachedSense), fromCache: true },
+        errors: discovery.errors,
+      };
+    }
+  }
+
   try {
-    const record = await fetchAndCache(real[0], { original, query, onProgress, seq, signal });
+    const record = await fetchAndCache(only, { original, query, onProgress, seq, signal });
     if (record?.cancelled || seq !== searchSeq) return { status: "cancelled" };
     return { status: "ready", record, errors: discovery.errors };
   } catch (e) {
     if (e?.name === "AbortError" || seq !== searchSeq) return { status: "cancelled" };
-    const cached = await loadCached(keyForm);
-    if (cached) return { status: "ready", record: cached, warning: e.message };
+    const cached = (await loadCached(keyForm)) || (await findCachedByQuery(keyForm));
+    if (cached) {
+      return {
+        status: "ready",
+        record: { ...sanitizeRecordGaps(cached), fromCache: true },
+        warning: e.message,
+      };
+    }
     return { status: "error", message: e.message, retryable: true, errors: discovery.errors };
   }
 }

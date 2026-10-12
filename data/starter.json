@@ -18,9 +18,7 @@
         "starter"
       ],
       "primarySource": "wiktionary",
-      "gaps": [
-        "Geographic positions mark language heartlands (inferred), not a documented travel itinerary for the word."
-      ],
+      "gaps": [],
       "alternatives": [],
       "citations": [
         {
@@ -49,7 +47,7 @@
           "lon": 38,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_coffee_wikt"
           ]
@@ -67,7 +65,7 @@
           "lon": 28.97,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_coffee_wikt"
           ]
@@ -85,7 +83,7 @@
           "lon": 11.3,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_coffee_wikt"
           ]
@@ -103,7 +101,7 @@
           "lon": 4.9,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_coffee_wikt"
           ]
@@ -121,7 +119,7 @@
           "lon": -0.12,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_coffee_wikt"
           ]
@@ -196,8 +194,7 @@
       ],
       "primarySource": "wiktionary",
       "gaps": [
-        "Includes a reconstructed Proto-Iranian stage (asterisk) as marked in sources.",
-        "Geographic associations are language-heartland inferences."
+        "Includes a reconstructed Proto-Iranian stage (asterisk) as marked in sources."
       ],
       "alternatives": [],
       "citations": [
@@ -245,7 +242,7 @@
           "lon": 62,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_paradise_wikt"
           ]
@@ -263,7 +260,7 @@
           "lon": 23.72,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_paradise_wikt"
           ]
@@ -281,7 +278,7 @@
           "lon": 12.5,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_paradise_wikt"
           ]
@@ -299,7 +296,7 @@
           "lon": -0.12,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_paradise_wikt"
           ]
@@ -370,9 +367,7 @@
         "starter"
       ],
       "primarySource": "wiktionary",
-      "gaps": [
-        "Borrowed scholarly term; schematic language-heartland path only."
-      ],
+      "gaps": [],
       "alternatives": [],
       "citations": [
         {
@@ -401,7 +396,7 @@
           "lon": 38,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_algebra_wikt"
           ]
@@ -419,7 +414,7 @@
           "lon": 8,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_algebra_wikt"
           ]
@@ -437,7 +432,7 @@
           "lon": -0.12,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_algebra_wikt"
           ]
@@ -485,8 +480,7 @@
       ],
       "primarySource": "wiktionary",
       "gaps": [
-        "Long borrowing chain; intermediate European stages simplified in this starter summary.",
-        "Geographic journey is incomplete relative to full trade history — honest schematic only."
+        "Simplified chain: Medieval Latin, Old French, and Middle English stages are omitted."
       ],
       "alternatives": [],
       "citations": [
@@ -516,7 +510,7 @@
           "lon": 80,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_sugar_wikt"
           ]
@@ -534,7 +528,7 @@
           "lon": 51.4,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_sugar_wikt"
           ]
@@ -552,7 +546,7 @@
           "lon": 38,
           "geoBasis": "language_heartland",
           "epistemic": "attested",
-          "note": "Inferred geographic association from language range.",
+          "note": "",
           "citationIds": [
             "cit_sugar_wikt"
           ]
@@ -605,11 +599,12 @@
           "toId": "sg_en",
           "type": "borrowing",
           "epistemic": "uncertain",
-          "note": "Direct arc skips documented European stages — schematic incomplete journey.",
+          "note": "Simplified chain: Medieval Latin, Old French, and Middle English stages are omitted.",
           "citationIds": [
             "cit_sugar_wikt"
           ],
-          "schematic": true
+          "schematic": true,
+          "bridged": true
         }
       ],
       "cachedAt": 0

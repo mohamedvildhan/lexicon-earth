@@ -17,8 +17,104 @@ export const EPISTEMIC = Object.freeze({
   reconstructed: "reconstructed",
   disputed: "disputed",
   uncertain: "uncertain",
+  unknown: "unknown",
   inferred_geo: "inferred_geo",
 });
+
+/** Strip Wiktionary anchors / underscores from forms. */
+export function cleanForm(form) {
+  return String(form ?? "")
+    .replace(/#[^\s]*/g, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isUnrecordedForm(n) {
+  const f = cleanForm(n?.form);
+  return !f || f === "—" || f === "-" || f === "…" || f === "?";
+}
+
+/** Strip refs, comments, and HTML from any user-visible string. */
+export function stripDisplayText(s) {
+  return String(s ?? "")
+    .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
+    .replace(/<ref\b[^>]*\/>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<\/?[a-zA-Z][^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Drop scraped/broken wikitext gap lines left in older caches. */
+export function isBadGapText(s) {
+  const t = String(s || "").trim();
+  if (!t) return true;
+  if (/extracted summary|not a quotation/i.test(t)) return true;
+  if (/,\s*from\s*,|from\s*,\s*from/i.test(t)) return true;
+  if (/from\s+,/.test(t) && (t.match(/from\s*,/g) || []).length >= 2) return true;
+  return false;
+}
+
+export function sanitizeRecordGaps(record) {
+  if (!record || !Array.isArray(record.gaps)) return record;
+  return { ...record, gaps: record.gaps.filter((g) => !isBadGapText(g)) };
+}
+
+/** Lineage chain summary from parsed nodes (not scraped wikitext). */
+export function buildLineageSummary(record) {
+  const ordered = topologicalOrder(record.nodes || [], record.edges || []);
+  const parts = ordered
+    .map((n) => (isUnrecordedForm(n) ? null : cleanForm(n.form)))
+    .filter(Boolean);
+  if (!parts.length) return "";
+  let text = parts.join(" → ");
+  const flagged = countUncertainLinks(record);
+  if (flagged > 0) {
+    text += `. ${flagged} link${flagged === 1 ? "" : "s"} disputed or uncertain`;
+  }
+  return text;
+}
+
+const HEDGE_RE =
+  /\b(possibly|perhaps|probably|maybe|uncertain|disputed|unclear|debated|or from)\b/i;
+
+/** Hedged / non-attested edges + unnamed nodes. */
+export function countUncertainLinks(record) {
+  let n = 0;
+  const seen = new Set();
+  for (const e of record.edges || []) {
+    const hedged =
+      (e.epistemic && e.epistemic !== EPISTEMIC.attested) ||
+      HEDGE_RE.test(e.note || "") ||
+      HEDGE_RE.test(e.label || "");
+    if (hedged) {
+      const key = `${e.fromId}|${e.toId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        n += 1;
+      }
+    }
+  }
+  for (const node of record.nodes || []) {
+    if (isUnrecordedForm(node)) n += 1;
+  }
+  return n;
+}
+
+/** Span from earliest dated, named node → now (language period, not word date). */
+export function approxLanguageSpan(nodes) {
+  const dated = (nodes || []).filter((n) => !isUnrecordedForm(n) && n.yearStart != null);
+  if (!dated.length) return null;
+  const earliest = Math.min(...dated.map((n) => n.yearStart));
+  const years = Math.max(0, new Date().getFullYear() - earliest);
+  return { years, earliest };
+}
 
 export const GEO_BASIS = Object.freeze({
   language_heartland: "language_heartland",
@@ -101,6 +197,7 @@ export function makeEdge({
   note = "",
   citationIds = [],
   schematic = true,
+  bridged = false,
 }) {
   return {
     id: nid("rel"),
@@ -112,6 +209,7 @@ export function makeEdge({
     note,
     citationIds: [...citationIds],
     schematic,
+    bridged: !!bridged,
   };
 }
 
@@ -174,7 +272,7 @@ export function toGlobePayload(record) {
   geoNodes.forEach((n, i) => {
     n.idx = i + 1;
     n.color = PAL[geoNodes.length < 2 ? 4 : Math.round((i / (geoNodes.length - 1)) * (PAL.length - 1))];
-    n.term = n.form;
+    n.term = isUnrecordedForm(n) ? "Unrecorded form" : cleanForm(n.form);
     n.lang = n.language;
     n.region = n.region || regionOf(n.languageCode) || "";
     n.place = n.region || n.language;
@@ -201,19 +299,23 @@ export function toGlobePayload(record) {
     let epistemic = EPISTEMIC.attested;
     let type = REL_TYPES.unknown;
     let schematic = true;
+    let edgeBridged = false;
     for (let j = ai; j < bi; j++) {
       const e = edgeByPair.get(`${ordered[j].id}|${ordered[j + 1].id}`);
       if (!e) continue;
       epistemic = weakerEpistemic(epistemic, e.epistemic || EPISTEMIC.attested);
       if (e.type && e.type !== REL_TYPES.unknown) type = e.type;
       if (e.schematic !== false) schematic = true;
+      if (e.bridged) edgeBridged = true;
     }
+    const bridged = bi - ai > 1 || edgeBridged;
     arcs.push({
       from: a,
       to: b,
       epistemic,
       type,
       schematic: schematic || a.geoBasis !== GEO_BASIS.documented_place,
+      bridged,
       color: b.color || a.color,
     });
   }
@@ -232,6 +334,7 @@ export function toGlobePayload(record) {
       epistemic: e.epistemic,
       type: e.type,
       schematic: e.schematic !== false || a.geoBasis !== GEO_BASIS.documented_place,
+      bridged: !!e.bridged,
       color: b.color || a.color,
     });
   }
@@ -270,5 +373,6 @@ export const STATUS_LABEL = {
   reconstructed: "Reconstructed",
   disputed: "Disputed",
   uncertain: "Uncertain",
+  unknown: "Unknown",
   inferred_geo: "Inferred geographic association",
 };

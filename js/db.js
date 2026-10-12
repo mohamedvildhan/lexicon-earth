@@ -1,5 +1,5 @@
 const DB_NAME = "lexicon-earth";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE = "entries";
 const META = "meta";
 
@@ -9,15 +9,16 @@ function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
+      const tx = req.transaction;
       let store;
       if (!db.objectStoreNames.contains(STORE)) {
         store = db.createObjectStore(STORE, { keyPath: "cacheKey" });
         store.createIndex("word", "word", { unique: false });
         store.createIndex("cachedAt", "cachedAt", { unique: false });
       } else {
-        store = req.transaction.objectStore(STORE);
+        store = tx.objectStore(STORE);
       }
       if (store && !store.indexNames.contains("query")) {
         store.createIndex("query", "query", { unique: false });
@@ -25,6 +26,8 @@ function openDb() {
       if (!db.objectStoreNames.contains(META)) {
         db.createObjectStore(META, { keyPath: "key" });
       }
+      /* Drop pre-v4 rows that still carry scraped “Extracted summary” gaps */
+      if (ev.oldVersion < 4 && store) store.clear();
     };
     req.onsuccess = () => {
       const db = req.result;

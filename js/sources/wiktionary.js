@@ -39,10 +39,16 @@ async function js(url, { signal } = {}) {
 }
 
 function clean(t) {
-  return t
-    .replace(/\{\{(?:m|l|mention|link)\|[^|}]*\|([^|}]*)[^}]*\}\}/g, "$1")
+  return String(t || "")
+    /* Expand term-bearing templates before wiping the rest */
+    .replace(/\{\{(?:m|l|mention|link)\|[^|}]*\|([^|}]*)[^}]*\}\}/gi, "$1")
+    .replace(/\{\{(?:der|inh|bor|inherited|borrowed|derived|lbor|calque|cal)\|[^|}]*\|[^|}]*\|([^|}]*)[^}]*\}\}/gi, "$1")
     .replace(/\{\{[^}]*\}\}/g, "")
     .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1")
+    .replace(/<ref\b[^>]*>[\s\S]*?<\/ref>/gi, "")
+    .replace(/<ref\b[^>]*\/>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<\/?[a-zA-Z][^>]*>/g, "")
     .replace(/'{2,}/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -117,7 +123,7 @@ function parseEty(wt) {
     /(origin|etymology) (is )?(unknown|uncertain|obscure)|(unknown|uncertain|obscure) (origin|etymology)/i.test(
       clean(wt)
     );
-  return { anc, formed, unknown, extractedText: clean(wt).slice(0, 400) };
+  return { anc, formed, unknown, extractedText: "" };
 }
 
 function geoFor(code) {
@@ -150,12 +156,16 @@ function geoFor(code) {
   };
 }
 
+function htmlToText(html) {
+  return new DOMParser().parseFromString(html || "", "text/html").body.textContent.trim();
+}
+
 async function fetchDefinition(title, { signal } = {}) {
   try {
     const d = await js(REST + encodeURIComponent(title), { signal });
     for (const g of d.en || []) {
       for (const item of g.definitions || []) {
-        const t = new DOMParser().parseFromString(item.definition || "", "text/html").body.textContent.trim();
+        const t = htmlToText(item.definition);
         if (t) return `${(g.partOfSpeech || "").toLowerCase()} — ${t}`;
       }
     }
@@ -163,6 +173,44 @@ async function fetchDefinition(title, { signal } = {}) {
     if (e?.name === "AbortError") throw e;
   }
   return "";
+}
+
+/** All English REST senses (POS + gloss), ordered as Wiktionary returns them. */
+async function fetchDefinitionList(title, { signal } = {}) {
+  try {
+    const d = await js(REST + encodeURIComponent(title), { signal });
+    const out = [];
+    for (const g of d.en || []) {
+      const pos = g.partOfSpeech || "";
+      for (const item of g.definitions || []) {
+        const t = htmlToText(item.definition);
+        if (t) out.push({ pos, gloss: t });
+      }
+    }
+    return out;
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
+  }
+  return [];
+}
+
+/** First POS heading + definition line from an etymology block (wikitext). */
+function sensePreviewFromSlice(slice) {
+  const raw = String(slice || "");
+  const posM = raw.match(
+    /^(={3,5})\s*(Noun|Verb|Adjective|Adverb|Proper noun|Interjection|Pronoun|Determiner|Numeral|Particle|Preposition|Conjunction|Symbol|Suffix|Prefix)\s*\1\s*$/im
+  );
+  const pos = posM ? posM[2] : "";
+  const defM = raw.match(/^#\s*(?!\*:|:|\*)(.+)$/m);
+  let gloss = "";
+  if (defM) {
+    gloss = clean(defM[1])
+      .replace(/\{\{[^}]*\}\}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  if (gloss.length > 140) gloss = gloss.slice(0, 137) + "…";
+  return { pos, gloss };
 }
 
 /**
@@ -205,14 +253,17 @@ function extractEnglishEtymologies(fullWt, sections) {
     ets: hits.map((h, i) => {
       const next = hits[i + 1];
       const sliceEnd = next ? next.index : enBody.length;
-      let body = enBody.slice(h.end, sliceEnd);
-      /* stop at next L3/L4 that isn't continuing this etymology block's first content */
-      body = body.replace(/^\s+/, "").split(/\n={3,4}[^=]/)[0];
+      const full = enBody.slice(h.end, sliceEnd).replace(/^\s+/, "");
+      /* Etymology templates only — stop before POS / usage headings */
+      const body = full.split(/\n={3,5}[^=]/)[0];
+      const preview = sensePreviewFromSlice(full);
       const sec = etySecs[i];
       return {
         line: h.line,
         wikitext: body.trim(),
         sectionIndex: sec?.index ?? null,
+        pos: preview.pos,
+        gloss: preview.gloss,
       };
     }),
   };
@@ -228,31 +279,34 @@ function buildGraph(title, pe, citation) {
 
   for (const a of anc) {
     const g = geoFor(a.code);
-    const pro = /-pro$/.test(g.languageCode) || /^\*/.test(a.alt || a.term || "");
-    let form = a.alt || a.term || "—";
-    if (pro && form !== "—" && form[0] !== "*") form = "*" + form;
-    const epistemic = a.dis ? EPISTEMIC.disputed : pro ? EPISTEMIC.reconstructed : EPISTEMIC.attested;
+    const rawTerm = (a.alt || a.term || "").replace(/#[^\s]*/g, "").replace(/_/g, " ").trim();
+    const unrecorded = !rawTerm || rawTerm === "-" || rawTerm === "—";
+    const pro = !unrecorded && (/-pro$/.test(g.languageCode) || /^\*/.test(rawTerm));
+    let form = unrecorded ? "—" : rawTerm;
+    if (pro && form[0] !== "*") form = "*" + form;
+    const epistemic = unrecorded
+      ? EPISTEMIC.unknown
+      : a.dis
+        ? EPISTEMIC.disputed
+        : pro
+          ? EPISTEMIC.reconstructed
+          : EPISTEMIC.attested;
     const node = makeNode({
       form,
       language: g.language,
       languageCode: g.languageCode,
       region: g.region || "",
-      gloss: a.gloss,
+      gloss: (a.gloss || "").replace(/#[^\s]*/g, "").replace(/_/g, " "),
       transliteration: a.tr,
-      yearStart: g.y,
-      yearEnd: g.yearEnd ?? null,
+      yearStart: unrecorded ? null : g.y,
+      yearEnd: unrecorded ? null : g.yearEnd ?? null,
       lat: g.lat,
       lon: g.lon,
       geoBasis: g.lat != null ? GEO_BASIS.language_heartland : GEO_BASIS.none,
       epistemic,
-      note: a.dis
-        ? `Hedged wording in Wiktionary extraction.`
-        : g.note || (g.lat != null ? "Geographic association = language heartland (inferred)." : ""),
+      note: a.dis ? "Hedged wording in Wiktionary extraction." : "",
       citationIds,
     });
-    if (g.lat != null && !g.note?.includes("Homeland")) {
-      node.note = (node.note ? node.note + " " : "") + "Inferred geographic association from language range.";
-    }
     nodes.push(node);
     if (prevId) {
       edges.push(
@@ -281,7 +335,7 @@ function buildGraph(title, pe, citation) {
     lon: en.lon,
     geoBasis: GEO_BASIS.language_heartland,
     epistemic: EPISTEMIC.attested,
-    note: "Inferred geographic association from language range.",
+    note: "",
     citationIds,
   });
   nodes.push(head);
@@ -304,11 +358,6 @@ function buildGraph(title, pe, citation) {
   if (pe.formed) gaps.push(`Formed from: ${pe.formed}.`);
   if (!anc.length) gaps.push("No reliable etymology templates found for this entry.");
   else if (pe.unknown) gaps.push("Earlier origins are uncertain or unrecorded on Wiktionary.");
-  if (pe.extractedText) {
-    gaps.push(
-      `Extracted summary (not a quotation): “${pe.extractedText.slice(0, 220)}${pe.extractedText.length > 220 ? "…" : ""}”`
-    );
-  }
 
   return { nodes, edges, gaps };
 }
@@ -393,27 +442,55 @@ export class WiktionaryAdapter extends SourceAdapter {
     const ets = extracted?.ets || [];
 
     if (!ets.length || (ets.length === 1 && !ets[0].wikitext && ets[0].line === "English entry")) {
+      const defs = await fetchDefinitionList(title, { signal });
+      const top = defs[0];
       out.push({
         id: `wikt:${title}:0`,
         lemma: title,
         language: "English",
         languageCode: "en",
         sense: "English entry",
-        gloss: "No dedicated etymology section",
+        pos: top?.pos || "",
+        gloss: top ? top.gloss : "No dedicated etymology section",
         sourceId: this.id,
         meta: { title, etyIndex: 0, sectionIndex: null, wikitext: "" },
       });
       return out;
     }
 
+    /* Fill missing previews from REST when wikitext has no POS block yet (common for Ety 1) */
+    let restDefs = null;
+    const needRest = ets.some((sec) => !sec.gloss);
+    if (needRest) restDefs = await fetchDefinitionList(title, { signal });
+
     ets.forEach((sec, i) => {
+      let pos = sec.pos || "";
+      let gloss = sec.gloss || "";
+      if (!gloss && restDefs?.length) {
+        /* Heuristic: map etymology n → nth distinct POS group’s first gloss */
+        const byPos = [];
+        let lastPos = null;
+        for (const d of restDefs) {
+          if (d.pos !== lastPos) {
+            byPos.push(d);
+            lastPos = d.pos;
+          }
+        }
+        const hit = byPos[i] || restDefs[i] || restDefs[0];
+        if (hit) {
+          pos = pos || hit.pos || "";
+          gloss = hit.gloss;
+        }
+      }
+      if (gloss.length > 140) gloss = gloss.slice(0, 137) + "…";
       out.push({
         id: `wikt:${title}:${i}`,
         lemma: title,
         language: "English",
         languageCode: "en",
         sense: sec.line,
-        gloss: ets.length > 1 ? `English · ${sec.line}` : "English entry",
+        pos,
+        gloss: gloss || (ets.length > 1 ? sec.line : "English entry"),
         sourceId: this.id,
         meta: {
           title,

@@ -6,7 +6,19 @@ import {
   setMultiSource,
   getMultiSource,
 } from "./pipeline.js";
-import { toGlobePayload, topologicalOrder, STATUS_LABEL } from "./model.js";
+import {
+  toGlobePayload,
+  topologicalOrder,
+  STATUS_LABEL,
+  cleanForm,
+  isUnrecordedForm,
+  stripDisplayText,
+  buildLineageSummary,
+  countUncertainLinks,
+  approxLanguageSpan,
+  isBadGapText,
+  sanitizeRecordGaps,
+} from "./model.js";
 import { listSourceCredits } from "./sources/index.js";
 import { createTypeahead } from "./typeahead.js";
 import {
@@ -31,6 +43,40 @@ let zoom = 1;
 let lastToast = 0;
 let pendingCandidates = null;
 let lastQuery = "";
+
+const RECENT_KEY = "lx_recent_searches";
+const RECENT_MAX = 8;
+
+function loadRecent() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((x) => typeof x === "string").slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(word) {
+  const w = String(word || "").trim();
+  if (!w) return;
+  const next = [w, ...loadRecent().filter((x) => x.toLowerCase() !== w.toLowerCase())].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function showRecentSearches() {
+  const input = $("searchInput");
+  if (!input || input.value.trim()) return;
+  const recent = loadRecent();
+  if (!recent.length) {
+    hideTypeahead();
+    return;
+  }
+  showTypeahead(recent, "Recent");
+}
 
 function toast(msg) {
   $("toast").textContent = msg;
@@ -72,7 +118,7 @@ function hideTypeahead() {
   $("searchInput")?.setAttribute("aria-expanded", "false");
 }
 
-function showTypeahead(items) {
+function showTypeahead(items, heading = "") {
   const list = $("typeaheadList");
   const input = $("searchInput");
   if (!list || !input) return;
@@ -80,6 +126,12 @@ function showTypeahead(items) {
   if (!items.length) {
     hideTypeahead();
     return;
+  }
+  if (heading) {
+    const h = document.createElement("div");
+    h.className = "typeahead-heading";
+    h.textContent = heading;
+    list.appendChild(h);
   }
   items.forEach((word, i) => {
     const btn = document.createElement("button");
@@ -102,12 +154,38 @@ function showTypeahead(items) {
 
 const typeahead = createTypeahead({
   input: $("searchInput"),
-  onSuggestions: (items) => showTypeahead(items),
-  onClear: hideTypeahead,
+  onSuggestions: (items) => {
+    if ($("searchInput")?.value.trim()) showTypeahead(items);
+    else hideTypeahead();
+  },
+  onClear: () => {
+    if (document.activeElement === $("searchInput") && !$("searchInput")?.value.trim()) {
+      showRecentSearches();
+    } else hideTypeahead();
+  },
 });
 
+function syncClearBtn() {
+  const btn = $("searchClear");
+  if (!btn) return;
+  btn.hidden = !String($("searchInput")?.value || "").trim();
+}
+
+$("searchInput")?.addEventListener("input", syncClearBtn);
+$("searchInput")?.addEventListener("focus", () => {
+  if (!$("searchInput").value.trim()) showRecentSearches();
+});
 $("searchInput")?.addEventListener("blur", () => {
   setTimeout(hideTypeahead, 150);
+});
+$("searchClear")?.addEventListener("click", () => {
+  const input = $("searchInput");
+  if (!input) return;
+  input.value = "";
+  syncClearBtn();
+  hideTypeahead();
+  input.focus();
+  showRecentSearches();
 });
 
 function setMessage(htmlOrText, isHtml = false) {
@@ -142,14 +220,21 @@ function setPanelOpen(on) {
 }
 
 function showRecord(record) {
-  active = record;
+  active = sanitizeRecordGaps(record);
   pendingCandidates = null;
   const payload = toGlobePayload(record);
   const ordered = topologicalOrder(record.nodes, record.edges);
   selectedNode = payload.nodes[0] || ordered[0] || null;
 
   $("searchInput").value = record.queryOriginal || record.word;
+  syncClearBtn();
   setPanelOpen(true);
+  $("infoPanel")?.classList.remove("peek");
+  const peekBtn = $("panelPeekBtn");
+  if (peekBtn) {
+    peekBtn.textContent = "Peek";
+    peekBtn.setAttribute("aria-expanded", "true");
+  }
   $("emptyNote").style.display = "none";
 
   if (payload.hasGeo) {
@@ -167,22 +252,83 @@ function showRecord(record) {
   renderPanel();
 }
 
+function wiktionaryUrl(record) {
+  const c = (record.citations || []).find((x) => x.url && /wiktionary/i.test(x.url + (x.dataset || "")));
+  if (c?.url) return c.url;
+  const title = record.word || record.queryOriginal || record.query;
+  return title ? `https://en.wiktionary.org/wiki/${encodeURIComponent(title)}` : null;
+}
+
 function renderPanel() {
   const r = active;
   if (!r) return;
-  $("panelTitle").textContent = r.word;
-  $("panelDefinition").textContent = r.definition || "Definition unavailable.";
-  $("gapNote").textContent = (r.gaps || []).join(" ");
+  $("panelTitle").textContent = stripDisplayText(r.word);
+  $("panelDefinition").textContent = stripDisplayText(r.definition) || "Definition unavailable.";
 
   const N = topologicalOrder(r.nodes, r.edges);
-  const ys = N.map((n) => n.yearStart).filter((y) => y != null);
+  const mapped = N.filter((n) => n.lat != null && n.lon != null);
+  const unmapped = N.filter((n) => n.lat == null || n.lon == null);
+  const summary = buildLineageSummary(r);
+  const gapEl = $("gapNote");
+  gapEl.replaceChildren();
+  if (summary) {
+    const p = document.createElement("p");
+    p.className = "lineage-summary";
+    p.textContent = summary;
+    gapEl.appendChild(p);
+  }
+  (r.gaps || []).forEach((g) => {
+    const t = stripDisplayText(g);
+    if (
+      !t ||
+      isBadGapText(t) ||
+      /geographic association|language heartland|language range|not a documented travel/i.test(t)
+    ) {
+      return;
+    }
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = t;
+    gapEl.appendChild(p);
+  });
+  if (unmapped.length) {
+    const p = document.createElement("p");
+    p.className = "note map-count";
+    const langs = [...new Set(unmapped.map((n) => n.language || cleanForm(n.form) || "?"))];
+    p.textContent = `${mapped.length} of ${N.length} forms mapped. Unmapped: ${langs.join(", ")}.`;
+    gapEl.appendChild(p);
+  } else if (N.length) {
+    const p = document.createElement("p");
+    p.className = "note map-count";
+    p.textContent = `${mapped.length} of ${N.length} forms mapped.`;
+    gapEl.appendChild(p);
+  }
+  const wiki = wiktionaryUrl(r);
+  if (wiki) {
+    const a = document.createElement("a");
+    a.className = "wiki-link";
+    a.href = wiki;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = "Read the full etymology on Wiktionary";
+    gapEl.appendChild(a);
+  }
+
+  const span = approxLanguageSpan(N);
   $("statSteps").textContent = N.length;
-  $("statSpan").textContent =
-    ys.length > 1
-      ? ((v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k yrs" : v + " yrs"))(2026 - Math.min(...ys))
-      : "—";
-  $("statRegions").textContent = r.edges.filter((e) => e.epistemic !== "attested").length;
+  $("statSpan").textContent = span
+    ? span.years >= 1000
+      ? (span.years / 1000).toFixed(1) + "k yrs"
+      : span.years + " yrs"
+    : "—";
+  $("statSpanLabel").textContent = "Language period";
+  $("statRegions").textContent = countUncertainLinks(r);
   $("timelineCount").textContent = N.length ? `01 — ${String(N.length).padStart(2, "0")}` : "—";
+
+  const legend = $("heartlandLegend");
+  if (legend) {
+    legend.hidden = !N.some((n) => n.geoBasis === "language_heartland");
+  }
 
   const tl = $("panelTimeline");
   tl.replaceChildren();
@@ -190,43 +336,42 @@ function renderPanel() {
     const el = document.createElement("button");
     el.type = "button";
     const isSel =
-      selectedNode &&
-      (n === selectedNode || (n.id != null && n.id === selectedNode.id));
+      selectedNode && (n === selectedNode || (n.id != null && n.id === selectedNode.id));
     el.className = "timeline-item" + (isSel ? " selected" : "");
     el.style.setProperty("--node", n.color || "#9a988e");
     el.innerHTML =
       '<div class="lang-era"></div><div class="term"></div><div class="place"></div><div class="tag"></div>';
+    const unrecorded = isUnrecordedForm(n);
+    const form = unrecorded ? "Unrecorded form" : cleanForm(n.form);
     const era =
-      n.yearStart != null
+      !unrecorded && n.yearStart != null
         ? n.yearStart < 0
           ? `${-n.yearStart} BCE`
           : `${n.yearStart} CE`
         : "";
     const region = n.region || "";
-    el.querySelector(".lang-era").textContent = `${n.language}${region ? " · " + region : ""}${era ? " · c. " + era : ""}`;
-    el.querySelector(".term").textContent = n.form + (n.transliteration ? ` (${n.transliteration})` : "");
+    el.querySelector(".lang-era").textContent = `${n.language}${region ? " · " + region : ""}${
+      era ? " · language period c. " + era : ""
+    }`;
+    el.querySelector(".term").textContent =
+      form + (!unrecorded && n.transliteration ? ` (${stripDisplayText(n.transliteration)})` : "");
     const pl = el.querySelector(".place");
-    if (n.gloss) {
+    const gloss = stripDisplayText(n.gloss);
+    if (gloss) {
       pl.className = "place gloss";
-      pl.textContent = "“" + n.gloss + "”";
-    } else if (region) {
-      pl.textContent = region;
+      pl.textContent = "“" + gloss + "”";
     } else pl.remove();
     const tg = el.querySelector(".tag");
+    const epi = unrecorded ? "unknown" : n.epistemic || "attested";
     const c = document.createElement("span");
-    c.className = "st " + (n.epistemic || "attested");
-    c.textContent = STATUS_LABEL[n.epistemic] || n.epistemic;
+    c.className = "st " + epi;
+    c.textContent = STATUS_LABEL[epi] || epi;
     tg.append(c);
-    if (n.geoBasis === "language_heartland") {
-      const g = document.createElement("span");
-      g.className = "st inferred_geo";
-      g.textContent = STATUS_LABEL.inferred_geo;
-      tg.append(g);
-    }
-    if (n.note) {
+    const note = stripDisplayText(n.note);
+    if (note && !/geographic association|language heartland|language range/i.test(note)) {
       const d = document.createElement("div");
       d.className = "note";
-      d.textContent = n.note;
+      d.textContent = note;
       tg.append(d);
     }
     el.addEventListener("click", () => {
@@ -243,7 +388,6 @@ function renderPanel() {
     tl.appendChild(el);
   });
 
-  /* lineage graph (non-geo) */
   const lg = $("lineageGraph");
   if (lg) {
     lg.replaceChildren();
@@ -254,9 +398,13 @@ function renderPanel() {
       const row = document.createElement("div");
       row.className = "lineage-edge";
       row.innerHTML = `<span class="le-from"></span><span class="le-rel"></span><span class="le-to"></span>`;
-      row.querySelector(".le-from").textContent = `${from.form} (${from.language})`;
-      row.querySelector(".le-rel").textContent = `${e.type} · ${e.epistemic}${e.schematic ? " · schematic" : ""}`;
-      row.querySelector(".le-to").textContent = `${to.form} (${to.language})`;
+      const ff = isUnrecordedForm(from) ? "Unrecorded form" : cleanForm(from.form);
+      const tf = isUnrecordedForm(to) ? "Unrecorded form" : cleanForm(to.form);
+      row.querySelector(".le-from").textContent = `${ff} (${from.language})`;
+      row.querySelector(".le-rel").textContent = `${e.type} · ${e.epistemic}${e.schematic ? " · schematic" : ""}${
+        e.bridged ? " · bridged" : ""
+      }`;
+      row.querySelector(".le-to").textContent = `${tf} (${to.language})`;
       lg.appendChild(row);
     });
     if (!r.edges.length) {
@@ -267,7 +415,6 @@ function renderPanel() {
     }
   }
 
-  /* sources drawer */
   const src = $("sourcesList");
   if (src) {
     src.replaceChildren();
@@ -293,7 +440,10 @@ function renderPanel() {
   const cached = r.fromCache ? " · from local cache" : "";
   $("attrib").innerHTML =
     `Sources: ${(r.sourcesUsed || []).join(", ") || "—"}${cached}. ` +
+    `Wiktionary content © contributors · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>. ` +
     `Routes are schematic language associations, not attested itineraries.`;
+
+  $("arcLegend")?.removeAttribute("hidden");
 }
 
 function renderCandidates(list, original) {
@@ -301,17 +451,25 @@ function renderCandidates(list, original) {
   const box = document.createElement("div");
   box.className = "candidate-list";
   const intro = document.createElement("div");
-  intro.textContent = `Multiple entries for “${original}”. Choose one:`;
+  intro.className = "candidate-intro";
+  intro.textContent = `Multiple senses for “${original}”. Choose one:`;
   box.appendChild(intro);
   list.forEach((c) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "candidate";
-    b.innerHTML = `<strong></strong><span></span>`;
-    b.querySelector("strong").textContent = `${c.lemma} · ${c.language}`;
-    b.querySelector("span").textContent = `${c.sense}${c.gloss ? " — " + c.gloss : ""} · ${c.sourceId}`;
+    b.innerHTML = `<strong></strong><em></em><span></span>`;
+    const pos = c.pos ? String(c.pos).toLowerCase() : "";
+    const sense = c.sense || "Entry";
+    b.querySelector("strong").textContent = pos
+      ? `${c.lemma} · ${pos}`
+      : `${c.lemma} · ${c.language || "English"}`;
+    b.querySelector("em").textContent = sense;
+    const gloss = stripDisplayText(c.gloss || "");
+    const detail = gloss && !/^english\b/i.test(gloss) && gloss !== sense ? gloss : "";
+    b.querySelector("span").textContent = detail || `${c.sourceId || "wiktionary"}`;
     b.addEventListener("click", async () => {
-      setLoading(true, `Loading ${c.lemma} from ${c.sourceId}…`);
+      setLoading(true, `Loading ${c.lemma} (${sense})…`);
       try {
         const record = await selectCandidate(c, { original, query: normalizeQuery(original).keyForm });
         if (record?.cancelled) return;
@@ -334,9 +492,12 @@ async function chooseWord(raw) {
   lastQuery = raw;
   const { query } = normalizeQuery(raw);
   if (!query) return;
+  $("searchInput")?.blur();
   setLoading(true, navigator.onLine ? "Searching dictionaries…" : "Checking local cache…");
   $("retryBtn").hidden = true;
   setPanelOpen(false);
+  $("infoPanel")?.classList.remove("peek");
+  syncClearBtn();
 
   const result = await searchWord(query, {
     onProgress: (m) => setLoading(true, m),
@@ -349,6 +510,7 @@ async function chooseWord(raw) {
   if (result.status === "ready") {
     if (result.warning) toast(result.warning);
     setMessage("");
+    pushRecent(result.record.queryOriginal || result.record.word || query);
     showRecord(result.record);
     return;
   }
@@ -425,10 +587,20 @@ $("searchForm").addEventListener("submit", (e) => {
   e.preventDefault();
   typeahead.cancel();
   hideTypeahead();
+  $("searchInput")?.blur();
   chooseWord($("searchInput").value);
 });
 
 $("retryBtn").addEventListener("click", () => chooseWord(lastQuery || $("searchInput").value));
+
+$("panelPeekBtn")?.addEventListener("click", () => {
+  const panel = $("infoPanel");
+  if (!panel?.classList.contains("visible")) return;
+  panel.classList.toggle("peek");
+  const peek = panel.classList.contains("peek");
+  $("panelPeekBtn").textContent = peek ? "Expand" : "Peek";
+  $("panelPeekBtn").setAttribute("aria-expanded", peek ? "false" : "true");
+});
 
 $("closePanel").addEventListener("click", () => {
   setPanelOpen(false);
@@ -444,6 +616,9 @@ $("closePanel").addEventListener("click", () => {
   $("searchInput").value = "";
   setMessage("");
   $("noGeoNote").hidden = true;
+  $("arcLegend")?.setAttribute("hidden", "");
+  $("infoPanel")?.classList.remove("peek");
+  syncClearBtn();
 });
 
 $("resetBtn").addEventListener("click", () => {
