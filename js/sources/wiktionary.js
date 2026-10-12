@@ -392,7 +392,12 @@ function extractIpa(wt) {
 /**
  * Fill missing transliterations for non-Latin forms via Wiktionary {{xlit}}.
  * One batched expandtemplates call per lineage to stay under rate limits.
+ * Exported so cached panel records can be backfilled after load.
  */
+export async function enrichNodeRomanizations(nodes, { signal, pageWt = "" } = {}) {
+  return enrichTransliterations(nodes, { signal, pageWt });
+}
+
 async function enrichTransliterations(nodes, { signal, pageWt = "" } = {}) {
   if (!nodes?.length) return;
 

@@ -22,6 +22,7 @@ import {
 } from "./model.js";
 import { atlasStats, ATLAS_META, GEO_DISCLAIMER } from "./languages.js";
 import { listSourceCredits } from "./sources/index.js";
+import { enrichNodeRomanizations } from "./sources/wiktionary.js";
 import { createTypeahead } from "./typeahead.js";
 import {
   importJson,
@@ -249,6 +250,32 @@ function setPanelOpen(on, { minimized = false } = {}) {
   if (on) syncPanelToggle(!!minimized);
 }
 
+function recordNeedsRomanization(record) {
+  return (record?.nodes || []).some(
+    (n) => needsRomanization(n.form) && !String(n.transliteration || "").trim()
+  );
+}
+
+/** Backfill Latin readings for cached lineages that predate {{xlit}} enrichment. */
+async function ensureRomanizations(record) {
+  if (!record || !navigator.onLine || !recordNeedsRomanization(record)) return false;
+  try {
+    await enrichNodeRomanizations(record.nodes || []);
+  } catch {
+    return false;
+  }
+  const filled = (record.nodes || []).some((n) => String(n.transliteration || "").trim());
+  if (filled && record.cacheKey) {
+    try {
+      const { fromCache: _fc, ...toStore } = record;
+      await putEntry(record.cacheKey, toStore);
+    } catch {
+      /* ignore cache write failures */
+    }
+  }
+  return filled;
+}
+
 function showRecord(record, opts = {}) {
   active = sanitizeRecordGaps(record);
   if (Object.prototype.hasOwnProperty.call(opts, "siblings")) {
@@ -289,6 +316,11 @@ function showRecord(record, opts = {}) {
     $("noGeoNote").hidden = false;
   }
   renderPanel();
+  const shown = active;
+  ensureRomanizations(shown).then((changed) => {
+    if (!changed || active !== shown) return;
+    renderPanel();
+  });
 }
 
 function wiktionaryUrl(record) {

@@ -743,14 +743,14 @@ body:has(#arcLegend:not([hidden])) .canvas-hint {
 
 .word-roman,
 .term-roman {
-  font: 500 0.72em/1.2 var(--serif);
+  font: 500 0.78em/1.2 var(--serif);
   font-style: italic;
-  color: var(--muted);
+  color: #5a5c54;
   letter-spacing: 0;
 }
 
 .term-roman {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .definition {
