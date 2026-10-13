@@ -1069,7 +1069,7 @@ function setupServiceWorkerAutoUpdate() {
 
   addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./sw.js")
+      .register("./sw.js", { updateViaCache: "none" })
       .then((reg) => {
         if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
         if (reg.installing) promptSkip(reg.installing);
@@ -1077,11 +1077,11 @@ function setupServiceWorkerAutoUpdate() {
 
         const check = () => reg.update().catch(() => {});
         check();
+        /* Re-check when the user comes back to the tab — no polling */
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") check();
         });
-        /* Catch deploys while a tab stays open */
-        setInterval(check, 5 * 60 * 1000);
+        addEventListener("focus", check);
       })
       .catch(() => {
         /* ignore — HTTP context / unsupported */
