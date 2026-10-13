@@ -1043,13 +1043,50 @@ migrateLegacyLocalStorage()
   .then(() => seedStarter(false))
   .then(refreshCacheList);
 
-if ("serviceWorker" in navigator) {
+/** Auto-apply deploys: new SW → claim clients → soft reload (no hard-refresh). */
+function setupServiceWorkerAutoUpdate() {
+  if (!("serviceWorker" in navigator)) return;
+
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    /* First install claims the page — don't bounce the user. Updates do reload. */
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    toast("Updating…");
+    location.reload();
+  });
+
+  const promptSkip = (worker) => {
+    if (!worker) return;
+    worker.addEventListener("statechange", () => {
+      if (worker.state === "installed" && navigator.serviceWorker.controller) {
+        worker.postMessage({ type: "SKIP_WAITING" });
+      }
+    });
+  };
+
   addEventListener("load", () => {
     navigator.serviceWorker
       .register("./sw.js")
-      .then((reg) => reg.update())
+      .then((reg) => {
+        if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        if (reg.installing) promptSkip(reg.installing);
+        reg.addEventListener("updatefound", () => promptSkip(reg.installing));
+
+        const check = () => reg.update().catch(() => {});
+        check();
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") check();
+        });
+        /* Catch deploys while a tab stays open */
+        setInterval(check, 5 * 60 * 1000);
+      })
       .catch(() => {
-      /* ignore — HTTP context / unsupported */
-    });
+        /* ignore — HTTP context / unsupported */
+      });
   });
 }
+
+setupServiceWorkerAutoUpdate();

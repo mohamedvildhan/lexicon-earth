@@ -27,34 +27,6 @@
   }
 }
 </script>
-<!-- Bust stale service-worker shells that ignore hard-reload -->
-<script>
-(() => {
-  const SHELL = "lx-v46";
-  const KEY = "lx_shell_ver";
-  try {
-    if (localStorage.getItem(KEY) === SHELL) return;
-    localStorage.setItem(KEY, SHELL);
-    const reloadOnce = () => {
-      if (sessionStorage.getItem("lx_bust_" + SHELL)) return;
-      sessionStorage.setItem("lx_bust_" + SHELL, "1");
-      location.reload();
-    };
-    const jobs = [];
-    if ("serviceWorker" in navigator) {
-      jobs.push(
-        navigator.serviceWorker.getRegistrations().then((regs) =>
-          Promise.all(regs.map((r) => r.unregister()))
-        )
-      );
-    }
-    if (window.caches) {
-      jobs.push(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
-    }
-    Promise.all(jobs).finally(reloadOnce);
-  } catch (_) {}
-})();
-</script>
 </head>
 <body>
 <div class="grain"></div>
