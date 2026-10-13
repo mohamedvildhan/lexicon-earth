@@ -35,6 +35,8 @@ import {
 } from "./db.js";
 
 const $ = (id) => document.getElementById(id);
+const isMobileViewport = () =>
+  typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 
 const canvas = $("globeCanvas");
 const labelLayer = $("globeLabels");
@@ -231,11 +233,24 @@ function syncPanelToggle(minimized) {
   if (eyebrow) eyebrow.hidden = !!minimized;
 }
 
+/** Body classes drive mobile chrome so zoom/legend never paint over the sheet. */
+function syncChromeLayout() {
+  const panel = $("infoPanel");
+  const open = !!panel?.classList.contains("visible");
+  const minimized = !!panel?.classList.contains("minimized");
+  document.body.classList.toggle("is-mobile", isMobileViewport());
+  document.body.classList.toggle("panel-open", open);
+  document.body.classList.toggle("panel-minimized", open && minimized);
+  document.body.classList.toggle("panel-expanded", open && !minimized);
+}
+
 function setPanelMinimized(on) {
   const panel = $("infoPanel");
   if (!panel || !panel.classList.contains("visible")) return;
   panel.classList.toggle("minimized", !!on);
   syncPanelToggle(!!on);
+  syncChromeLayout();
+  if (!on) panel.scrollTop = 0;
 }
 
 function setPanelOpen(on, { minimized = false } = {}) {
@@ -248,6 +263,7 @@ function setPanelOpen(on, { minimized = false } = {}) {
   if (on) panel.removeAttribute("inert");
   else panel.setAttribute("inert", "");
   if (on) syncPanelToggle(!!minimized);
+  syncChromeLayout();
 }
 
 function recordNeedsRomanization(record) {
@@ -289,9 +305,9 @@ function showRecord(record, opts = {}) {
 
   $("searchInput").value = record.queryOriginal || record.word;
   syncClearBtn();
-  setPanelOpen(true, { minimized: false });
+  /* Mobile: dock as a tab so the globe path stays visible; expand on demand */
+  setPanelOpen(true, { minimized: isMobileViewport() });
   $("emptyNote").style.display = "none";
-  if ($("canvasHint")) $("canvasHint").hidden = true;
 
   if (payload.hasGeo) {
     globe.setGraph(payload, selectedNode);
@@ -1019,6 +1035,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 updateZoom();
+syncChromeLayout();
+addEventListener("resize", () => {
+  syncChromeLayout();
+});
 migrateLegacyLocalStorage()
   .then(() => seedStarter(false))
   .then(refreshCacheList);
